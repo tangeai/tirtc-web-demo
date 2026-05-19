@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="favicon.ico" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"
+    />
+    <title>Ti RTC Web Player Demo</title>
+    <style>
+      .input-card {
+        max-width: 768px;
+      }
+
+      /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
+      canvas.video-container {
+        background-color: #111;
+        width: calc(100vw * 0.96);
+        height: calc(100vw * 0.96 * 9 / 16);
+
+        display: block;
+        margin-top: 10px;
+        margin-left: auto;
+        margin-right: auto;
+        padding-right: 0;
+      }
+
+      @media screen and (min-width: 576px) {
+        canvas.video-container {
+          width: calc(100vw * 0.56);
+          height: calc(100vw * 0.56 * 9 / 16);
+        }
+      }
+    </style>
+
+    <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" /> -->
+    <link href="https://cdnjs.snrat.com/ajax/libs/twitter-bootstrap/5.2.3/css/bootstrap.min.css" rel="stylesheet" />
+  </head>
+
+  <body>
+    <!-- 当前版本需要将canvas标签的id设置为"canvas"，后续将支持动态配置 -->
+    <canvas class="video-container" id="canvas"></canvas>
+
+    <!-- control container -->
+    <div class="my-3 mx-2">
+      <!-- player control card -->
+      <div class="mt-3 mx-auto card input-card">
+        <div class="card-body row g-3 align-items-end">
+          <div class="col-12">
+            <label>实时直播</label>
+          </div>
+
+          <div class="col-6">
+            <label class="form-label">设备ID</label>
+            <input type="text" class="form-control" id="deviceId" value="1C01FRVEKAC0" />
+          </div>
+
+          <div class="col-6">
+            <label class="form-label">Token</label>
+            <input type="text" class="form-control" id="token" />
+          </div>
+
+          <div class="col-3 text-right">
+            <button id="play" class="btn btn-primary">播放</button>
+          </div>
+
+          <div class="col-3 text-right">
+            <button id="stop" class="btn btn-secondary">停止</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- common params card -->
+      <div class="mt-3 mx-auto card input-card">
+        <div class="card-body row g-3 align-items-end">
+          <div class="col-12">
+            <label>公共参数</label>
+          </div>
+
+          <div class="col-6">
+            <label class="form-label">App ID</label>
+            <input type="text" class="form-control" id="app-id" value="" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      // 引用TiRtc API
+      import { TiRtc, TiRtcInitOptions, TiRtcConn, TiRtcVideoOutput, TiRtcAudioOutput } from './tirtc.es.min.js';
+
+      document.addEventListener('DOMContentLoaded', function (event) {
+        // 优先从url获取表单数据
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const urlParams = Object.fromEntries(urlSearchParams.entries());
+        console.log(urlParams);
+
+        const defaultDeviceId = urlParams.device_id;
+        if (defaultDeviceId) {
+          $('input[id=deviceId]').val(defaultDeviceId);
+        }
+
+        const defaultAppId = urlParams.app_id || '';
+        if (defaultAppId) $('input[id=app-id]').val(defaultAppId);
+
+        const defaultToken = urlParams.token || '';
+        if (defaultAppId) $('input[id=token]').val(defaultToken);
+
+        // 创建API配置 与 初始化API
+        const initOptions = TiRtcInitOptions({ appId: defaultAppId });
+        TiRtc.initialize(initOptions);
+
+        // 播放器样例
+        class SamplePlayer {
+          audioStreamId = 10;
+          videoStreamId = 11;
+
+          constructor({ videoContainer } = {}) {
+            this.isPlaying = false;
+
+            // player canvas container
+            // console.log(videoContainer);
+            this.canvasContainer = null;
+            if (videoContainer && videoContainer.tagName === 'CANVAS') {
+              this.canvasContainer = videoContainer;
+            }
+          }
+
+          ready() {
+            // 判断播放器是否准备完毕，需等待播放器下载wasm依赖
+            return TiRtc.videoOutputReady();
+          }
+
+          play({ deviceId = '', token = '' }) {
+            console.log('play');
+            if (this.isPlaying) return;
+
+            if (!deviceId) {
+              iToast('请输入设备ID');
+              console.error('no deviceId');
+              return;
+            }
+
+            this.isPlaying = true;
+
+            // 创建一个设备连接模块
+            const connection = new TiRtcConn();
+
+            // 创建一个设备媒体播放模块
+            const { audioStreamId, videoStreamId } = this;
+            const audioOutput = TiRtcAudioOutput({ connection, streamId: audioStreamId });
+            const videoOutput = TiRtcVideoOutput({ connection, streamId: videoStreamId });
+
+            // 保存实例
+            this.connection = connection;
+            this.videoOutput = videoOutput;
+            this.audioOutput = audioOutput;
+
+            // 连接设备
+            connection
+              .connect({
+                deviceId, // 设备ID
+                token, // 设备Token
+              })
+              // 连接成功
+              .then(() => {
+                // 绑定设备连接，启动音视频数据的传输，解码和渲染
+                audioOutput.attach();
+                videoOutput.attach();
+
+                connection.subscribeAudio({ streamId: audioStreamId });
+                connection.subscribeVideo({ streamId: videoStreamId });
+              })
+              .catch((error) => {
+                console.log('failed to connect device: ', error);
+              });
+          }
+
+          stop() {
+            console.log('stop');
+
+            if (this.connection) this.connection.disconnect();
+            if (this.audioOutput) this.audioOutput.detach();
+            if (this.videoOutput) this.videoOutput.detach();
+
+            this.isPlaying = false;
+          }
+        }
+
+        // 初始化播放器实例
+        const player = new SamplePlayer({
+          videoContainer: document.getElementById('canvas'),
+        });
+
+        // 等待播放器依赖库下载与准备完毕
+        player.ready().then(() => {
+          // 开始播放
+          document.getElementById('play').addEventListener('click', () => {
+            player.play({
+              deviceId: $('input[id=deviceId]').val(),
+              token: $('input[id=token]').val(),
+            });
+          });
+
+          // 停止播放
+          document.getElementById('stop').addEventListener('click', () => {
+            player.stop();
+          });
+        });
+      });
+    </script>
+
+    <!-- 简单的UI组件 -->
+    <script type="text/javascript">
+      // Toast
+      function iToast(message, type = 'info', duration = 5000) {
+        // 创建Toast容器（如果不存在）
+        let container = $('#toast-container');
+        if (container.length === 0) {
+          $('body').append(`
+              <div id="toast-container" class="position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+              </div>
+            `);
+          container = $('#toast-container');
+        }
+
+        const toastId = 'toast-' + Date.now();
+
+        const toastHtml = `
+            <div id="${toastId}" class="alert alert-${type} alert-dismissible fade show mb-2" role="alert" style="min-width: 300px;">
+              ${message}
+            </div>
+          `;
+
+        container.append(toastHtml);
+
+        setTimeout(() => {
+          $(`#${toastId}`).fadeOut(300, function () {
+            $(this).remove();
+          });
+        }, duration);
+      }
+    </script>
+
+    <!-- <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.2/dist/jquery.min.js"></script> -->
+    <script src="https://cdnjs.snrat.com/ajax/libs/jquery/3.6.3/jquery.min.js"></script>
+
+    <!-- vconsole -->
+    <script src="https://cdnjs.snrat.com/ajax/libs/eruda/3.0.1/eruda.min.js"></script>
+    <script>
+      if (location?.search?.includes('enable-vconsole')) eruda.init();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "tirtc-web-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "http-server examples -p 3000",
+    "generate:player-url": "node scripts/generate-player-url.js"
+  },
+  "devDependencies": {
+    "fs-extra": "^11.3.0",
+    "http-server": "^14.1.1",
+    "prettier": "^3.5.2"
+  }
+}
