@@ -108,7 +108,8 @@
         if (defaultAppId) $('input[id=token]').val(defaultToken);
 
         // 创建API配置 与 初始化API
-        const initOptions = TiRtcInitOptions({ appId: defaultAppId });
+        const endpoint = 'https://ep-test-tirtc.tange365.com/';
+        const initOptions = TiRtcInitOptions({ appId: defaultAppId, endpoint });
         TiRtc.initialize(initOptions);
 
         // 播放器样例
