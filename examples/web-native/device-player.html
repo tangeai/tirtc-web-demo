@@ -68,6 +68,14 @@
           <div class="col-3 text-right">
             <button id="stop" class="btn btn-secondary">停止</button>
           </div>
+
+          <div class="col-3 text-right">
+            <button id="rec-start" class="btn btn-secondary">开始对讲</button>
+          </div>
+
+          <div class="col-3 text-right">
+            <button id="rec-stop" class="btn btn-secondary">停止对讲</button>
+          </div>
         </div>
       </div>
 
@@ -88,7 +96,14 @@
 
     <script type="module">
       // 引用TiRtc API
-      import { TiRtc, TiRtcInitOptions, TiRtcConn, TiRtcVideoOutput, TiRtcAudioOutput } from './tirtc.es.min.js';
+      import {
+        TiRtc,
+        TiRtcInitOptions,
+        TiRtcConn,
+        TiRtcVideoOutput,
+        TiRtcAudioOutput,
+        TiRtcAudioInput,
+      } from './tirtc.es.min.js';
 
       document.addEventListener('DOMContentLoaded', function (event) {
         // 优先从url获取表单数据
@@ -153,10 +168,16 @@
             const audioOutput = TiRtcAudioOutput({ connection, streamId: audioStreamId });
             const videoOutput = TiRtcVideoOutput({ connection, streamId: videoStreamId });
 
+            // 创建一个语音对讲模块
+            const audioInput = new TiRtcAudioInput({ connection });
+            // 配置对讲模块音频参数
+            audioInput.setOptions({ sampleRate: this.audioSampleRate });
+
             // 保存实例
             this.connection = connection;
             this.videoOutput = videoOutput;
             this.audioOutput = audioOutput;
+            this.audioInput = audioInput;
 
             // 连接设备
             connection
@@ -184,8 +205,28 @@
             if (this.connection) this.connection.disconnect();
             if (this.audioOutput) this.audioOutput.detach();
             if (this.videoOutput) this.videoOutput.detach();
+            this.stopTalkback();
 
             this.isPlaying = false;
+          }
+
+          startTalkback() {
+            const { audioInput } = this;
+            if (!audioInput) return;
+
+            // 打开对讲模块，申请麦克风权限
+            audioInput.start().then(() => {
+              // 开始对讲
+              audioInput.attach().catch((error) => {
+                console.log(error);
+              });
+            });
+          }
+
+          stopTalkback() {
+            // 停止对讲
+            if (this.audioInput) this.audioInput.stop();
+            this.audioInput = null;
           }
         }
 
@@ -207,6 +248,16 @@
           // 停止播放
           document.getElementById('stop').addEventListener('click', () => {
             player.stop();
+          });
+
+          // 开始对讲
+          document.getElementById('rec-start').addEventListener('click', () => {
+            player.startTalkback();
+          });
+
+          // 停止对讲
+          document.getElementById('rec-stop').addEventListener('click', () => {
+            player.stopTalkback();
           });
         });
       });
