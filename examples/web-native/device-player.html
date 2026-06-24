@@ -193,6 +193,7 @@
 
                 connection.subscribeAudio({ streamId: audioStreamId });
                 connection.subscribeVideo({ streamId: videoStreamId });
+                connection.requestKeyFrame({ streamId: videoStreamId });
               })
               .catch((error) => {
                 console.log('failed to connect device: ', error);
