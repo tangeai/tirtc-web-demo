@@ -79,6 +79,19 @@
         </div>
       </div>
 
+      <!-- command card -->
+      <div class="mt-3 mx-auto card input-card">
+        <div class="card-body row g-3 align-items-end">
+          <div class="col-12">
+            <label>命令</label>
+          </div>
+
+          <div class="col-3">
+            <button name="command-sendCommand" class="btn btn-secondary">发送命令</button>
+          </div>
+        </div>
+      </div>
+
       <!-- common params card -->
       <div class="mt-3 mx-auto card input-card">
         <div class="card-body row g-3 align-items-end">
@@ -123,8 +136,8 @@
         if (defaultAppId) $('input[id=token]').val(defaultToken);
 
         // 创建API配置 与 初始化API
-        const endpoint = 'https://ep-test-tirtc.tange365.com/';
-        const initOptions = TiRtcInitOptions({ appId: defaultAppId, endpoint });
+        // const endpoint = 'https://ep-test-tirtc.tange365.com/';
+        const initOptions = TiRtcInitOptions({ appId: defaultAppId });
         TiRtc.initialize(initOptions);
 
         // 播放器样例
@@ -259,6 +272,53 @@
           // 停止对讲
           document.getElementById('rec-stop').addEventListener('click', () => {
             player.stopTalkback();
+          });
+
+          // 接收命令
+          function mountCommandListener(connection) {
+            function decodeCommandData(data) {
+              if (!data) return '';
+
+              if (data instanceof ArrayBuffer) {
+                return new TextDecoder().decode(new Uint8Array(data));
+              }
+
+              return '';
+            }
+
+            connection.onCommand = ({ commandId, data }) => {
+              const payloadText = decodeCommandData(data);
+
+              const getDeviceStatusResultCommandId = 0x10002;
+              if (commandId === getDeviceStatusResultCommandId) {
+                console.log(`received device status result: ${payloadText}`);
+                iToast(`设备状态响应: ${payloadText}`, 'success');
+                return;
+              }
+
+              console.log(`received command 0x${commandId.toString(16)} payload=${payloadText}`);
+            };
+          }
+
+          // 发送命令
+          document.querySelector('button[name=command-sendCommand]').addEventListener('click', () => {
+            const connection = player.connection;
+            if (connection) {
+              const getDeviceStatusCommandId = 0x10000;
+              const payload = new TextEncoder().encode('status?');
+              connection
+                .sendCommand({
+                  commandId: getDeviceStatusCommandId,
+                  data: payload,
+                })
+                .catch((error) => {
+                  console.error('failed to send status command: ', error);
+                  iToast(`发送命令失败: ${error}`, 'danger');
+                });
+              iToast('已发送设备状态请求');
+
+              mountCommandListener(connection);
+            }
           });
         });
       });
