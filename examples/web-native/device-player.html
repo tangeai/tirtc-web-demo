@@ -68,6 +68,27 @@
           <div class="col-3 text-right">
             <button id="stop" class="btn btn-secondary">停止</button>
           </div>
+
+          <div class="col-3 text-right">
+            <button id="rec-start" class="btn btn-secondary">开始对讲</button>
+          </div>
+
+          <div class="col-3 text-right">
+            <button id="rec-stop" class="btn btn-secondary">停止对讲</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- command card -->
+      <div class="mt-3 mx-auto card input-card">
+        <div class="card-body row g-3 align-items-end">
+          <div class="col-12">
+            <label>命令</label>
+          </div>
+
+          <div class="col-3">
+            <button name="command-sendCommand" class="btn btn-secondary">发送命令</button>
+          </div>
         </div>
       </div>
 
@@ -88,7 +109,14 @@
 
     <script type="module">
       // 引用TiRtc API
-      import { TiRtc, TiRtcInitOptions, TiRtcConn, TiRtcVideoOutput, TiRtcAudioOutput } from './tirtc.es.min.js';
+      import {
+        TiRtc,
+        TiRtcInitOptions,
+        TiRtcConn,
+        TiRtcVideoOutput,
+        TiRtcAudioOutput,
+        TiRtcAudioInput,
+      } from './tirtc.es.min.js';
 
       document.addEventListener('DOMContentLoaded', function (event) {
         // 优先从url获取表单数据
@@ -108,6 +136,7 @@
         if (defaultAppId) $('input[id=token]').val(defaultToken);
 
         // 创建API配置 与 初始化API
+        // const endpoint = 'https://ep-test-tirtc.tange365.com/';
         const initOptions = TiRtcInitOptions({ appId: defaultAppId });
         TiRtc.initialize(initOptions);
 
@@ -152,10 +181,16 @@
             const audioOutput = TiRtcAudioOutput({ connection, streamId: audioStreamId });
             const videoOutput = TiRtcVideoOutput({ connection, streamId: videoStreamId });
 
+            // 创建一个语音对讲模块
+            const audioInput = new TiRtcAudioInput({ connection });
+            // 配置对讲模块音频参数
+            audioInput.setOptions({ sampleRate: this.audioSampleRate });
+
             // 保存实例
             this.connection = connection;
             this.videoOutput = videoOutput;
             this.audioOutput = audioOutput;
+            this.audioInput = audioInput;
 
             // 连接设备
             connection
@@ -171,6 +206,7 @@
 
                 connection.subscribeAudio({ streamId: audioStreamId });
                 connection.subscribeVideo({ streamId: videoStreamId });
+                connection.requestKeyFrame({ streamId: videoStreamId });
               })
               .catch((error) => {
                 console.log('failed to connect device: ', error);
@@ -183,8 +219,28 @@
             if (this.connection) this.connection.disconnect();
             if (this.audioOutput) this.audioOutput.detach();
             if (this.videoOutput) this.videoOutput.detach();
+            this.stopTalkback();
 
             this.isPlaying = false;
+          }
+
+          startTalkback() {
+            const { audioInput } = this;
+            if (!audioInput) return;
+
+            // 打开对讲模块，申请麦克风权限
+            audioInput.start().then(() => {
+              // 开始对讲
+              audioInput.attach().catch((error) => {
+                console.log(error);
+              });
+            });
+          }
+
+          stopTalkback() {
+            // 停止对讲
+            if (this.audioInput) this.audioInput.stop();
+            this.audioInput = null;
           }
         }
 
@@ -206,6 +262,63 @@
           // 停止播放
           document.getElementById('stop').addEventListener('click', () => {
             player.stop();
+          });
+
+          // 开始对讲
+          document.getElementById('rec-start').addEventListener('click', () => {
+            player.startTalkback();
+          });
+
+          // 停止对讲
+          document.getElementById('rec-stop').addEventListener('click', () => {
+            player.stopTalkback();
+          });
+
+          // 接收命令
+          function mountCommandListener(connection) {
+            function decodeCommandData(data) {
+              if (!data) return '';
+
+              if (data instanceof ArrayBuffer) {
+                return new TextDecoder().decode(new Uint8Array(data));
+              }
+
+              return '';
+            }
+
+            connection.onCommand = ({ commandId, data }) => {
+              const payloadText = decodeCommandData(data);
+
+              const getDeviceStatusResultCommandId = 0x10002;
+              if (commandId === getDeviceStatusResultCommandId) {
+                console.log(`received device status result: ${payloadText}`);
+                iToast(`设备状态响应: ${payloadText}`, 'success');
+                return;
+              }
+
+              console.log(`received command 0x${commandId.toString(16)} payload=${payloadText}`);
+            };
+          }
+
+          // 发送命令
+          document.querySelector('button[name=command-sendCommand]').addEventListener('click', () => {
+            const connection = player.connection;
+            if (connection) {
+              const getDeviceStatusCommandId = 0x10000;
+              const payload = new TextEncoder().encode('status?');
+              connection
+                .sendCommand({
+                  commandId: getDeviceStatusCommandId,
+                  data: payload,
+                })
+                .catch((error) => {
+                  console.error('failed to send status command: ', error);
+                  iToast(`发送命令失败: ${error}`, 'danger');
+                });
+              iToast('已发送设备状态请求');
+
+              mountCommandListener(connection);
+            }
           });
         });
       });

@@ -92,7 +92,7 @@ async function main() {
 main().catch((error) => {
   if (/missing required access_key_id/i.test(error.message)) {
     console.error(
-      'Missing access key. Set TIRTC_ACCESS_KEY_ID / TIRTC_SECRET_KEY_ID / TIRTC_APP_ID first.',
+      'Missing access key. Set TIRTC_ACCESS_KEY_ID / TIRTC_DEVICE_SECRET_KEY / TIRTC_APP_ID first.',
     );
     process.exit(1);
   }
