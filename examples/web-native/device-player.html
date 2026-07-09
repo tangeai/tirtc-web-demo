@@ -144,6 +144,7 @@
         class SamplePlayer {
           audioStreamId = 10;
           videoStreamId = 11;
+          audioInputStreamId = 14;
 
           constructor({ videoContainer } = {}) {
             this.isPlaying = false;
@@ -177,12 +178,12 @@
             const connection = new TiRtcConn();
 
             // 创建一个设备媒体播放模块
-            const { audioStreamId, videoStreamId } = this;
+            const { audioStreamId, videoStreamId, audioInputStreamId } = this;
             const audioOutput = TiRtcAudioOutput({ connection, streamId: audioStreamId });
             const videoOutput = TiRtcVideoOutput({ connection, streamId: videoStreamId });
 
             // 创建一个语音对讲模块
-            const audioInput = new TiRtcAudioInput({ connection });
+            const audioInput = new TiRtcAudioInput({ connection, streamId: audioInputStreamId });
             // 配置对讲模块音频参数
             audioInput.setOptions({ sampleRate: this.audioSampleRate });
 
@@ -240,7 +241,6 @@
           stopTalkback() {
             // 停止对讲
             if (this.audioInput) this.audioInput.stop();
-            this.audioInput = null;
           }
         }
 
