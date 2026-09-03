@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>生成播放链接</title>
+    <link href="https://cdnjs.snrat.com/ajax/libs/twitter-bootstrap/5.2.3/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+      .input-card {
+        max-width: 768px;
+      }
+
+      #player-url {
+        word-break: break-all;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!--
+      本地 demo 工具：在浏览器里签发 connect token，生成 device-player.html 播放链接。
+      支持用 URL 预填参数，例如：
+        generate-player-url.html?ak=...&sk=...&uid=uid111&device_id=xxx&app_id=2818153
+      SK 只用于本页签名，不会写入生成后的播放链接。带 SK 的生成页 URL 不要发到公网。
+    -->
+    <div class="my-3 mx-2">
+      <div class="mt-3 mx-auto card input-card">
+        <div class="card-body">
+          <h5 class="card-title mb-3">生成播放链接</h5>
+
+          <form id="form" class="row g-3">
+            <div class="col-6">
+              <label class="form-label" for="ak">Access Key (ak)</label>
+              <input type="text" class="form-control" id="ak" autocomplete="off" required />
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="sk">Secret Key (sk)</label>
+              <input type="password" class="form-control" id="sk" autocomplete="off" required />
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="uid">用户 ID (uid)</label>
+              <input type="text" class="form-control" id="uid" required />
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="device_id">设备 ID (device_id)</label>
+              <input type="text" class="form-control" id="device_id" required />
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="app_id">App ID (app_id)</label>
+              <input type="text" class="form-control" id="app_id" required />
+            </div>
+            <div class="col-6">
+              <label class="form-label" for="ttl">有效秒数 (ttl)</label>
+              <input type="number" class="form-control" id="ttl" min="1" value="300" />
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary">生成链接</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div id="result-card" class="mt-3 mx-auto card input-card d-none">
+        <div class="card-body">
+          <h5 class="card-title mb-3">播放链接</h5>
+          <p id="player-url" class="mb-3"></p>
+          <a id="open-player" class="btn btn-primary" target="_blank" rel="noopener">打开播放页</a>
+          <button type="button" id="copy-url" class="btn btn-secondary">复制链接</button>
+          <span id="copy-hint" class="ms-2 text-success d-none">已复制</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ---------- 1. 从当前页 URL 读取参数 ----------
+      function readUrlParams() {
+        const search = new URLSearchParams(window.location.search);
+        return {
+          ak: search.get('ak') || '',
+          sk: search.get('sk') || '',
+          uid: search.get('uid') || '',
+          device_id: search.get('device_id') || '',
+          app_id: search.get('app_id') || '',
+          ttl: search.get('ttl') || '',
+        };
+      }
+
+      // ---------- 2. 把 URL 参数填进表单 ----------
+      function fillForm(params) {
+        document.getElementById('ak').value = params.ak;
+        document.getElementById('sk').value = params.sk;
+        document.getElementById('uid').value = params.uid;
+        document.getElementById('device_id').value = params.device_id;
+        document.getElementById('app_id').value = params.app_id;
+        if (params.ttl) {
+          document.getElementById('ttl').value = params.ttl;
+        }
+      }
+
+      function readForm() {
+        return {
+          ak: document.getElementById('ak').value.trim(),
+          sk: document.getElementById('sk').value.trim(),
+          uid: document.getElementById('uid').value.trim(),
+          deviceId: document.getElementById('device_id').value.trim(),
+          appId: document.getElementById('app_id').value.trim(),
+          ttl: Number.parseInt(document.getElementById('ttl').value, 10) || 300,
+        };
+      }
+
+      // ---------- 3. Base64URL：和 Node 的 Buffer.toString('base64url') 一致 ----------
+      function base64UrlEncode(bytes) {
+        let binary = '';
+        bytes.forEach((byte) => {
+          binary += String.fromCharCode(byte);
+        });
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }
+
+      // ---------- 4. HMAC-SHA256，密钥是 SK，签名内容是 payloadBase64 ----------
+      async function signHmacSha256(secret, message) {
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+          'raw',
+          encoder.encode(secret),
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign'],
+        );
+        const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+        return base64UrlEncode(new Uint8Array(signature));
+      }
+
+      // ---------- 5. 签发 token：v1.{payloadBase64}.{signature} ----------
+      async function createToken({ ak, sk, uid, deviceId, ttl }) {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const payload = {
+          sub: uid,
+          scope: `connect:device://${deviceId}`,
+          iss: ak,
+          iat: nowSeconds,
+          exp: nowSeconds + ttl,
+          nonce: `connect-${nowSeconds}-${crypto.randomUUID()}`,
+        };
+
+        const payloadBase64 = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+        const signature = await signHmacSha256(sk, payloadBase64);
+        return `v1.${payloadBase64}.${signature}`;
+      }
+
+      // ---------- 6. 拼播放链接：只带 device_id / app_id / token，不带 AK/SK ----------
+      function buildPlayerUrl({ deviceId, appId, token }) {
+        const url = new URL('device-player.html', window.location.href);
+        url.searchParams.set('device_id', deviceId);
+        url.searchParams.set('app_id', appId);
+        url.searchParams.set('token', token);
+        return url.toString();
+      }
+
+      // ---------- 7. 校验 → 出链接 → 展示 ----------
+      function showResult(playerUrl) {
+        const resultCard = document.getElementById('result-card');
+        const urlEl = document.getElementById('player-url');
+        const openEl = document.getElementById('open-player');
+
+        urlEl.textContent = playerUrl;
+        openEl.href = playerUrl;
+        resultCard.classList.remove('d-none');
+        document.getElementById('copy-hint').classList.add('d-none');
+      }
+
+      async function generateAndShow() {
+        const { ak, sk, uid, deviceId, appId, ttl } = readForm();
+
+        if (!ak || !sk || !uid || !deviceId || !appId) {
+          return false;
+        }
+
+        if (ttl <= 0) {
+          window.alert('ttl 必须是正整数');
+          return false;
+        }
+
+        const token = await createToken({ ak, sk, uid, deviceId, ttl });
+        const playerUrl = buildPlayerUrl({ deviceId, appId, token });
+        showResult(playerUrl);
+        return true;
+      }
+
+      document.getElementById('form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        await generateAndShow();
+      });
+
+      document.getElementById('copy-url').addEventListener('click', async () => {
+        const playerUrl = document.getElementById('player-url').textContent;
+        await navigator.clipboard.writeText(playerUrl);
+        document.getElementById('copy-hint').classList.remove('d-none');
+      });
+
+      // 页面打开时：URL 预填表单；必填项齐全则自动生成一次
+      fillForm(readUrlParams());
+      generateAndShow();
+    </script>
+  </body>
+</html>
