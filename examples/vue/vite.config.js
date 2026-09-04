@@ -11,15 +11,4 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: (id) => {
-          if (id.includes('tgapi.es.min.js')) {
-            return 'tgapi'; // 单独打包为 large-library.[hash].js
-          }
-        },
-      },
-    },
-  },
 });

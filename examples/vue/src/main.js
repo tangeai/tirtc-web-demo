@@ -5,11 +5,15 @@ import './style.css';
 
 import App from './App.vue';
 
-const Hello = () => import('./pages/hello/index.vue');
+const Index = () => import('./pages/index/index.vue');
+const DevicePlayer = () => import('./pages/device-player/index.vue');
 const DeviceInfo = () => import('./pages/device-info/index.vue');
+const Hello = () => import('./pages/hello/index.vue');
 
 const routes = [
-  { path: '/', component: DeviceInfo },
+  { path: '/', component: Index },
+  { path: '/device-player', component: DevicePlayer },
+  { path: '/device-info', component: DeviceInfo },
   { path: '/hello', component: Hello },
 ];
 
