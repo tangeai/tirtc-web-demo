@@ -1,12 +1,12 @@
-// 运行时按 URL 加载 public 下的 SDK：不走 Vite 打包，wasm 仍用 JS 同目录相对路径
-const {
+// 静态引入 vendor 下的 SDK；wasm 由 SDK 内 new URL('./xxx.wasm', import.meta.url) 解析
+import {
   TiRtc,
   TiRtcInitOptions,
   TiRtcConn,
   TiRtcVideoOutput,
   TiRtcAudioOutput,
   TiRtcAudioInput,
-} = await import(`${window.location.origin}/tirtc/tirtc.es.min.js`);
+} from '@/vendor/tirtc/tirtc.es.min.js';
 
 // 设备流约定：音频下行 10、视频下行 11、对讲上行 14、自定义流消息 3
 const AUDIO_STREAM_ID = 10;
