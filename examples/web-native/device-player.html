@@ -39,8 +39,8 @@
   </head>
 
   <body>
-    <!-- 当前版本需要将canvas标签的id设置为"canvas"，后续将支持动态配置 -->
-    <canvas class="video-container" id="canvas"></canvas>
+    <!-- 视频渲染canvas -->
+    <canvas class="video-container" id="video-view"></canvas>
 
     <!-- control container -->
     <div class="my-3 mx-2">
@@ -152,15 +152,12 @@
 
           audioSampleRate = 8000;
 
-          constructor({ videoContainer } = {}) {
+          view = null; // 视频渲染canvas
+
+          constructor({ view } = {}) {
             this.isPlaying = false;
 
-            // player canvas container
-            // console.log(videoContainer);
-            this.canvasContainer = null;
-            if (videoContainer && videoContainer.tagName === 'CANVAS') {
-              this.canvasContainer = videoContainer;
-            }
+            this.view = view && view.tagName === 'CANVAS' ? view : null;
           }
 
           ready() {
@@ -186,12 +183,16 @@
             // 创建一个设备媒体播放模块
             const { audioStreamId, videoStreamId, audioInputStreamId } = this;
             const audioOutput = TiRtcAudioOutput({ connection, streamId: audioStreamId });
-            const videoOutput = TiRtcVideoOutput({ connection, streamId: videoStreamId });
+            const videoOutput = TiRtcVideoOutput({
+              connection,
+              streamId: videoStreamId,
+              view: this.view,
+            });
 
             // 创建一个语音对讲模块
             const audioInput = new TiRtcAudioInput({ connection, streamId: audioInputStreamId });
             // 配置对讲模块音频参数
-            audioInput.setOptions({ sampleRate: this.audioSampleRate });
+            audioInput.setOptions({ codec: 'g711a', sampleRate: this.audioSampleRate });
 
             // 保存实例
             this.connection = connection;
@@ -252,7 +253,7 @@
 
         // 初始化播放器实例
         const player = new SamplePlayer({
-          videoContainer: document.getElementById('canvas'),
+          view: document.getElementById('video-view'),
         });
 
         // 等待播放器依赖库下载与准备完毕
@@ -360,14 +361,16 @@
               const timestampMs = Date.now() >>> 0; // 当前毫秒时间戳，uint32
               const payload = new TextEncoder().encode('hello');
 
-              connection.sendStreamMessage({
-                streamId: streamIdMessage,
-                timestampMs,
-                data: payload,
-              }).catch((error) => {
-                console.error('failed to send stream message:', error);
-                iToast(`发送流消息失败: ${error}`, 'danger');
-              });
+              connection
+                .sendStreamMessage({
+                  streamId: streamIdMessage,
+                  timestampMs,
+                  data: payload,
+                })
+                .catch((error) => {
+                  console.error('failed to send stream message:', error);
+                  iToast(`发送流消息失败: ${error}`, 'danger');
+                });
               iToast('已发送流消息');
 
               mountStreamMessageListener(connection);
