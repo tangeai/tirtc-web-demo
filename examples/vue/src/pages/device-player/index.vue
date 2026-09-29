@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, onMounted, onUnmounted } from 'vue';
-import { readUrlParams, initTiRtc, SamplePlayer } from './index.module.js';
+import { readUrlParams, initTiRtc, SamplePlayer, formatError } from './index.module.js';
 
 const form = reactive({
   deviceId: '',
@@ -15,13 +15,20 @@ const toast = reactive({
   type: 'info',
 });
 
+const toastClassByType = {
+  error: 'alert-error',
+  success: 'alert-success',
+  info: 'alert-info',
+};
+
 let player = null;
 let toastTimer = null;
 
 function showToast(message, type = 'info') {
   toast.message = message;
-  toast.type = type === 'error' ? 'alert-error' : type === 'success' ? 'alert-success' : 'alert-info';
+  toast.type = toastClassByType[type] || toastClassByType.info;
   toast.show = true;
+
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     toast.show = false;
@@ -56,20 +63,23 @@ function handleSendStreamMessage() {
 }
 
 onMounted(async () => {
+  // 1. 从表单 URL 带回 device_id / token / app_id
   const params = readUrlParams();
   form.deviceId = params.deviceId;
   form.token = params.token;
   form.appId = params.appId;
 
+  // 2. 进页时 initialize，后面改 App ID 输入框不会重新生效
   initTiRtc(form.appId);
 
   player = new SamplePlayer({
     onToast: showToast,
     onError: (error) => {
-      showToast(String(error), 'error');
+      showToast(formatError(error), 'error');
     },
   });
 
+  // 3. 等 wasm 就绪后才能点播放
   await player.ready();
   playerReady.value = true;
 });
@@ -142,7 +152,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* the canvas *must not* have any border or padding, or mouse coords will be wrong */
+/* canvas 不要加边框或内边距，否则鼠标坐标会偏 */
 .video-container {
   display: block;
   width: calc(100vw * 0.96);
