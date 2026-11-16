@@ -1,4 +1,4 @@
-import { TiRtc, TiRtcInitOptions, TiRtcConn, TiRtcVideoOutput, TiRtcAudioOutput, TiRtcAudioInput } from 'tirtc-web';
+import { TiRtc, TiRtcInitOptions, TiRtcConn, TiRtcVideoOutput, TiRtcAudioOutput, TiRtcAudioInput } from '@/libs/tirtc';
 
 // 设备播放示例：initialize → 等 wasm → 建连 → attach + 订阅 → 对讲 / 命令 / 流消息。
 // 页面必须有 <canvas id="canvas">，当前公开 API 只认这个固定 id，且不要加边框或内边距。
