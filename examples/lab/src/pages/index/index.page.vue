@@ -1,5 +1,7 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue';
+import AppContainer from '../../components/AppContainer.vue';
+import AppHeader from '../../components/AppHeader.vue';
 import { getDefaultFormValues, saveForm, createToken, buildPlayerUrl } from './index.module.js';
 
 const form = reactive({
@@ -76,7 +78,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl space-y-4 p-4">
+  <AppContainer extraClass="space-y-2">
+    <AppHeader />
+
     <!-- 生成本地播放链接；SK 只用于本页签名，不会写入播放 URL -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
@@ -131,5 +135,5 @@ onMounted(() => {
         </div>
       </div>
     </div>
-  </div>
+  </AppContainer>
 </template>

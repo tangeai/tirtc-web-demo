@@ -1,6 +1,8 @@
 <script setup>
 import { computed, reactive, ref, onMounted, onUnmounted } from 'vue';
 import { NConfigProvider, NDatePicker, zhCN, dateZhCN } from 'naive-ui';
+import AppContainer from '../../components/AppContainer.vue';
+import AppHeader from '../../components/AppHeader.vue';
 import { EXPORT_HINT, SPEEDS, readUrlParams, formatTime, SampleCloudStorage } from './index.module.js';
 
 const form = reactive(readUrlParams());
@@ -113,7 +115,9 @@ onUnmounted(() => {
 
 <template>
   <n-config-provider :locale="zhCN" :date-locale="dateZhCN">
-    <div class="mx-auto max-w-3xl space-y-4 p-4">
+    <AppContainer extraClass="space-y-2">
+      <AppHeader />
+
       <div class="card bg-base-100 shadow-sm">
         <div class="card-body">
           <h2 class="card-title">云存回放</h2>
@@ -219,6 +223,6 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
-    </div>
+    </AppContainer>
   </n-config-provider>
 </template>

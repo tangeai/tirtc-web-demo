@@ -1,5 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue';
+import AppContainer from '../../components/AppContainer.vue';
+import AppHeader from '../../components/AppHeader.vue';
 import {
   saveLastFormInfo,
   getDefaultFormValues,
@@ -66,7 +68,9 @@ const openPlayerIframe = () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl space-y-4">
+  <AppContainer extraClass="space-y-2">
+    <AppHeader />
+
     <!-- 公共参数卡片 -->
     <div class="p-1 card bg-base-100 card-sm shadow-sm">
       <div class="card-body">
@@ -177,5 +181,5 @@ const openPlayerIframe = () => {
         </div>
       </div>
     </div>
-  </div>
+  </AppContainer>
 </template>

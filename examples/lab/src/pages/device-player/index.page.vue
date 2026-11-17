@@ -1,5 +1,7 @@
 <script setup>
 import { reactive, ref, onMounted, onUnmounted } from 'vue';
+import AppContainer from '../../components/AppContainer.vue';
+import AppHeader from '../../components/AppHeader.vue';
 import { readUrlParams, initTiRtc, SamplePlayer, formatError } from './index.module.js';
 
 const form = reactive({
@@ -92,54 +94,53 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div>
-    <!-- 当前 SDK 要求 canvas 的 id 必须是 canvas；不能有边框/内边距，否则鼠标坐标会错 -->
-    <canvas id="canvas" class="video-container"></canvas>
+  <AppContainer extraClass="space-y-2">
+    <AppHeader />
 
-    <div class="mx-auto max-w-3xl space-y-4 p-4">
-      <div class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-          <h2 class="card-title">实时直播</h2>
+    <canvas id="canvas" class="block aspect-video w-full bg-neutral-900"></canvas>
 
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <fieldset class="fieldset">
-              <label class="fieldset-label">设备ID</label>
-              <input v-model="form.deviceId" type="text" class="input w-full" />
-            </fieldset>
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">实时直播</h2>
 
-            <fieldset class="fieldset">
-              <label class="fieldset-label">Token</label>
-              <input v-model="form.token" type="text" class="input w-full" />
-            </fieldset>
-          </div>
-
-          <div class="flex flex-wrap gap-3">
-            <button type="button" class="btn btn-primary" :disabled="!playerReady" @click="handlePlay">播放</button>
-            <button type="button" class="btn" @click="handleStop">停止</button>
-            <button type="button" class="btn" @click="handleStartTalkback">开始对讲</button>
-            <button type="button" class="btn" @click="handleStopTalkback">停止对讲</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-          <h2 class="card-title">命令 & 流消息</h2>
-          <div class="flex flex-wrap gap-3">
-            <button type="button" class="btn" @click="handleSendCommand">发送命令</button>
-            <button type="button" class="btn" @click="handleSendStreamMessage">发送流消息</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-          <h2 class="card-title">公共参数</h2>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <fieldset class="fieldset">
-            <label class="fieldset-label">App ID</label>
-            <input v-model="form.appId" type="text" class="input w-full" disabled />
+            <label class="fieldset-label">设备ID</label>
+            <input v-model="form.deviceId" type="text" class="input w-full" />
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <label class="fieldset-label">Token</label>
+            <input v-model="form.token" type="text" class="input w-full" />
           </fieldset>
         </div>
+
+        <div class="flex flex-wrap gap-3">
+          <button type="button" class="btn btn-primary" :disabled="!playerReady" @click="handlePlay">播放</button>
+          <button type="button" class="btn" @click="handleStop">停止</button>
+          <button type="button" class="btn" @click="handleStartTalkback">开始对讲</button>
+          <button type="button" class="btn" @click="handleStopTalkback">停止对讲</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">命令 & 流消息</h2>
+        <div class="flex flex-wrap gap-3">
+          <button type="button" class="btn" @click="handleSendCommand">发送命令</button>
+          <button type="button" class="btn" @click="handleSendStreamMessage">发送流消息</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">公共参数</h2>
+        <fieldset class="fieldset">
+          <label class="fieldset-label">App ID</label>
+          <input v-model="form.appId" type="text" class="input w-full" disabled />
+        </fieldset>
       </div>
     </div>
 
@@ -148,7 +149,7 @@ onUnmounted(() => {
         <span>{{ toast.message }}</span>
       </div>
     </div>
-  </div>
+  </AppContainer>
 </template>
 
 <style scoped>
