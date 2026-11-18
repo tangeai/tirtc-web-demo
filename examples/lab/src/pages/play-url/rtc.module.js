@@ -1,4 +1,4 @@
-// 本地 demo：在浏览器里签发 connect token，生成播放页链接。
+// 本地 demo：在浏览器里签发 connect token，生成实时播放页链接。
 // SK 只用于本页签名，不会写入播放 URL。带 SK 的生成页 URL 不要发到公网。
 
 const FORM_STORAGE_KEY = 'tirtc-generate-player-form';
