@@ -3,6 +3,7 @@ import { computed, reactive, ref, onMounted, onUnmounted } from 'vue';
 import { NConfigProvider, NDatePicker, zhCN, dateZhCN } from 'naive-ui';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
+import { IconLink } from '@/components/icons';
 import { EXPORT_HINT, SPEEDS, readUrlParams, formatTime, SampleCloudStorage } from './index.module.js';
 
 const form = reactive(readUrlParams());
@@ -120,7 +121,14 @@ onUnmounted(() => {
 
       <div class="card bg-base-100 shadow-sm">
         <div class="card-body">
-          <h2 class="card-title">云存回放</h2>
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="card-title">云存回放</h2>
+            <div class="tooltip tooltip-left" data-tip="生成链接">
+              <RouterLink to="/play-url/cloud-storage" class="btn btn-ghost btn-sm btn-circle" aria-label="生成链接">
+                <IconLink class="h-4 w-4" />
+              </RouterLink>
+            </div>
+          </div>
 
           <form class="grid grid-cols-1 gap-4 sm:grid-cols-2" @submit.prevent="handleQuery">
             <fieldset class="fieldset">

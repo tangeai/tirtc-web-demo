@@ -2,6 +2,7 @@
 import { reactive, ref, onMounted, onUnmounted } from 'vue';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
+import { IconLink } from '@/components/icons';
 import { readUrlParams, initTiRtc, SamplePlayer, formatError } from './index.module.js';
 
 const form = reactive({
@@ -101,7 +102,14 @@ onUnmounted(() => {
 
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
-        <h2 class="card-title">实时直播</h2>
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="card-title">实时直播</h2>
+          <div class="tooltip tooltip-left" data-tip="生成链接">
+            <RouterLink to="/play-url/rtc" class="btn btn-ghost btn-sm btn-circle" aria-label="生成链接">
+              <IconLink class="h-4 w-4" />
+            </RouterLink>
+          </div>
+        </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <fieldset class="fieldset">

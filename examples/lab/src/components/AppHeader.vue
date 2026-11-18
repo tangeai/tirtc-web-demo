@@ -1,12 +1,11 @@
 <script setup>
 import { useRoute } from 'vue-router';
+import { IconMenu } from '@/components/icons';
 
 const route = useRoute();
 
 const links = [
   { to: '/device-player', label: '实时直播', exact: true },
-  { to: '/play-url/rtc', label: '实时播放链接', exact: true },
-  { to: '/play-url/cloud-storage', label: '云录像播放链接', exact: true },
   { to: '/cloud-storage', label: '云存回放' },
 ];
 
@@ -23,15 +22,13 @@ function closeMenu(event) {
 <template>
   <div class="navbar bg-base-100 shadow-sm">
     <div class="navbar-start">
-      <RouterLink to="/device-player" class="btn btn-ghost text-xl">TiRTC</RouterLink>
+      <RouterLink to="/device-player" aria-current-value="false" class="btn btn-ghost text-xl">TiRTC</RouterLink>
     </div>
 
     <div class="navbar-end">
       <div class="dropdown dropdown-end">
         <div tabindex="0" role="button" class="btn btn-ghost btn-circle" aria-label="菜单">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
-          </svg>
+          <IconMenu class="h-5 w-5" />
         </div>
 
         <ul tabindex="-1" class="dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm">
