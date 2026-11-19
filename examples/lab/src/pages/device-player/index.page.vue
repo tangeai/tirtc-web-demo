@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, onMounted, onUnmounted } from 'vue';
+import { computed, reactive, ref, onMounted, onUnmounted } from 'vue';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
 import { IconLink } from '@/components/icons';
@@ -12,6 +12,13 @@ const form = reactive({
 });
 
 const playerReady = ref(false);
+// 卡片只展示概要。弹层改的是草稿，确定才写回 form，取消丢掉。
+const editor = ref(null);
+const draft = reactive({
+  deviceId: '',
+  token: '',
+  appId: '',
+});
 const toast = reactive({
   show: false,
   message: '',
@@ -38,7 +45,43 @@ function showToast(message, type = 'info') {
   }, 4000);
 }
 
+function shortenMiddle(value, head = 4, tail = 4) {
+  const text = value.trim();
+  if (!text) return '未填写';
+  if (text.length <= head + tail + 1) return text;
+  return `${text.slice(0, head)}…${text.slice(-tail)}`;
+}
+
+const credentialSummary = computed(() => {
+  const deviceId = form.deviceId.trim() || '未填写';
+  return `设备 ${deviceId} · Token ${shortenMiddle(form.token)} · App ${shortenMiddle(form.appId)}`;
+});
+
+function openEditor() {
+  draft.deviceId = form.deviceId;
+  draft.token = form.token;
+  draft.appId = form.appId;
+  editor.value?.showModal();
+}
+
+function closeEditor() {
+  editor.value?.close();
+}
+
+function confirmEditor() {
+  const nextAppId = draft.appId.trim();
+  const appIdChanged = nextAppId !== form.appId.trim();
+  form.deviceId = draft.deviceId;
+  form.token = draft.token;
+  form.appId = draft.appId;
+  closeEditor();
+  // initialize 只认当时传入的 App ID。和进页时不一样，确定后要再调一次。
+  // 设备 ID、Token 下次点播放才用，这里不用重连。
+  if (appIdChanged) initTiRtc(nextAppId);
+}
+
 function handlePlay() {
+  if (!form.deviceId.trim()) openEditor();
   player?.play({
     deviceId: form.deviceId.trim(),
     token: form.token.trim(),
@@ -72,7 +115,7 @@ onMounted(async () => {
   form.token = params.token;
   form.appId = params.appId;
 
-  // 2. 进页时 initialize，后面改 App ID 输入框不会重新生效
+  // 2. 进页先 initialize。之后只在弹框里改了 App ID 并确定时再调一次
   initTiRtc(form.appId);
 
   player = new SamplePlayer({
@@ -96,32 +139,55 @@ onUnmounted(() => {
 
 <template>
   <AppContainer extraClass="space-y-2">
-    <AppHeader />
+    <AppHeader title="实时直播" />
 
-    <canvas id="canvas" class="block aspect-video w-full bg-neutral-900"></canvas>
+    <canvas id="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
 
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
-        <div class="flex items-center justify-between gap-2">
-          <h2 class="card-title">实时直播</h2>
-          <div class="tooltip tooltip-left" data-tip="生成链接">
-            <RouterLink to="/play-url/rtc" class="btn btn-ghost btn-sm btn-circle" aria-label="生成链接">
-              <IconLink class="h-4 w-4" />
-            </RouterLink>
+
+        <!-- 凭证摘要 -->
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <p class="min-w-0 text-sm break-all text-base-content/70">{{ credentialSummary }}</p>
+          <div class="flex shrink-0 items-center gap-1">
+            <button type="button" class="btn btn-ghost btn-sm" @click="openEditor">修改</button>
+            <div class="tooltip tooltip-left" data-tip="生成链接">
+              <RouterLink to="/play-url/rtc" class="btn btn-ghost btn-sm btn-circle" aria-label="生成链接">
+                <IconLink class="h-4 w-4" />
+              </RouterLink>
+            </div>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <fieldset class="fieldset">
-            <label class="fieldset-label">设备ID</label>
-            <input v-model="form.deviceId" type="text" class="input w-full" />
-          </fieldset>
+        <!-- 按钮不在 form 里，不必再套一层弹层组件。showModal 已处理 Esc 和点遮罩关闭。 -->
+        <dialog ref="editor" class="modal modal-bottom sm:modal-middle">
+          <div class="modal-box">
+            <h3 class="text-lg font-medium">连接参数</h3>
+            <div class="mt-4 grid grid-cols-1 gap-4">
+              <fieldset class="fieldset">
+                <label class="fieldset-label" for="device-id">设备ID</label>
+                <input id="device-id" v-model="draft.deviceId" type="text" class="input w-full" />
+              </fieldset>
 
-          <fieldset class="fieldset">
-            <label class="fieldset-label">Token</label>
-            <input v-model="form.token" type="text" class="input w-full" />
-          </fieldset>
-        </div>
+              <fieldset class="fieldset">
+                <label class="fieldset-label" for="token">Token</label>
+                <input id="token" v-model="draft.token" type="text" class="input w-full" autocomplete="off" />
+              </fieldset>
+
+              <fieldset class="fieldset">
+                <label class="fieldset-label" for="app-id">App ID</label>
+                <input id="app-id" v-model="draft.appId" type="text" class="input w-full" />
+              </fieldset>
+            </div>
+            <div class="modal-action">
+              <button type="button" class="btn" @click="closeEditor">取消</button>
+              <button type="button" class="btn btn-primary" @click="confirmEditor">确定</button>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop">
+            <button>关闭</button>
+          </form>
+        </dialog>
 
         <div class="flex flex-wrap gap-3">
           <button type="button" class="btn btn-primary" :disabled="!playerReady" @click="handlePlay">播放</button>
@@ -139,16 +205,6 @@ onUnmounted(() => {
           <button type="button" class="btn" @click="handleSendCommand">发送命令</button>
           <button type="button" class="btn" @click="handleSendStreamMessage">发送流消息</button>
         </div>
-      </div>
-    </div>
-
-    <div class="card bg-base-100 shadow-sm">
-      <div class="card-body">
-        <h2 class="card-title">公共参数</h2>
-        <fieldset class="fieldset">
-          <label class="fieldset-label">App ID</label>
-          <input v-model="form.appId" type="text" class="input w-full" disabled />
-        </fieldset>
       </div>
     </div>
 
