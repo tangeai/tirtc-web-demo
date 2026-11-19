@@ -1,8 +1,78 @@
-<script setup>
-import { computed, reactive, ref } from 'vue';
+<script setup lang="jsx">
+import { computed, reactive, ref, Teleport } from 'vue';
 import { NDatePicker } from 'naive-ui';
 import { IconLink } from '@/components/icons';
 import { readUrlParams, formatTime } from './index.module.js';
+
+// 不用 showModal，浏览器不会处理 Esc。关闭函数记在这里，弹层卸掉时一起卸掉监听。
+let escapeBinding = null;
+
+function bindEscape(el, onClose) {
+  if (escapeBinding?.el === el && el) {
+    escapeBinding.onClose = onClose;
+    return;
+  }
+  unbindEscape();
+  if (!el) return;
+  const onKeydown = (event) => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    escapeBinding?.onClose?.();
+  };
+  escapeBinding = { el, onClose, onKeydown };
+  window.addEventListener('keydown', onKeydown);
+}
+
+function unbindEscape() {
+  if (!escapeBinding) return;
+  window.removeEventListener('keydown', escapeBinding.onKeydown);
+  escapeBinding = null;
+}
+
+// 凭证编辑弹层。窄屏贴底，输入框能用满宽度；sm 以上回到居中对话框。
+// Teleport 到 body：确定/取消如果留在查询 form 里，会把查询也提交掉。
+function EditorDialog({ open, title, onClose, onConfirm }, { slots }) {
+  if (!open) return null;
+
+  return (
+    <Teleport to="body">
+      <dialog
+        class="modal modal-open modal-bottom sm:modal-middle"
+        aria-modal="true"
+        aria-labelledby="credential-editor-title"
+        ref={(el) => bindEscape(el, onClose)}
+      >
+        <div class="modal-box">
+          <h3 id="credential-editor-title" class="text-lg font-medium">
+            {title}
+          </h3>
+          <div class="mt-4">{slots.default?.()}</div>
+          <div class="modal-action">
+            <button type="button" class="btn" onClick={onClose}>
+              取消
+            </button>
+            <button type="button" class="btn btn-primary" onClick={onConfirm}>
+              确定
+            </button>
+          </div>
+        </div>
+        <form class="modal-backdrop">
+          <button type="button" onClick={onClose}>
+            关闭
+          </button>
+        </form>
+      </dialog>
+    </Teleport>
+  );
+}
+
+// 声明后，关闭回调留在参数里，不会被当成多余属性挂到 Teleport 上。
+EditorDialog.props = {
+  open: Boolean,
+  title: String,
+  onClose: Function,
+  onConfirm: Function,
+};
 
 const props = defineProps({
   player: { type: Object, default: null },
@@ -10,8 +80,27 @@ const props = defineProps({
 });
 
 const form = reactive(readUrlParams());
-// 凭证来自链接，默认收成一行。缺 App ID 或 Token 时展开，方便补填。
-const credentialsOpen = ref(!form.appId.trim() || !form.token.trim());
+// 卡片上只留一行概览。弹层里改的是草稿，确定才写回 form，取消丢弃。
+const editorOpen = ref(false);
+const draft = reactive({ appId: '', token: '', endpoint: '' });
+
+function openEditor() {
+  draft.appId = form.appId;
+  draft.token = form.token;
+  draft.endpoint = form.endpoint;
+  editorOpen.value = true;
+}
+
+function closeEditor() {
+  editorOpen.value = false;
+}
+
+function confirmEditor() {
+  form.appId = draft.appId;
+  form.token = draft.token;
+  form.endpoint = draft.endpoint;
+  editorOpen.value = false;
+}
 
 const recordingDays = computed(() => props.session.days.filter((day) => day.hasRecording));
 
@@ -58,12 +147,12 @@ async function handleQuery() {
     return;
   }
   if (!form.appId.trim()) {
-    credentialsOpen.value = true;
+    openEditor();
     props.session.status = '请填写 App ID';
     return;
   }
   if (!form.token.trim()) {
-    credentialsOpen.value = true;
+    openEditor();
     props.session.status = '请填写 Token';
     return;
   }
@@ -113,6 +202,38 @@ function handleCancelExport() {
       </div>
 
       <form class="space-y-3" @submit.prevent="handleQuery">
+        <div class="flex items-center justify-between gap-2">
+          <p class="min-w-0 text-sm break-all text-base-content/70">
+            {{ credentialSummary }}
+          </p>
+          <button type="button" class="btn btn-ghost btn-sm ms-auto shrink-0" @click="openEditor">修改</button>
+        </div>
+
+        <EditorDialog :open="editorOpen" title="连接凭证" @close="closeEditor" @confirm="confirmEditor">
+          <div class="grid grid-cols-1 gap-4">
+            <fieldset class="fieldset">
+              <label class="fieldset-label" for="app-id">App ID</label>
+              <input id="app-id" v-model="draft.appId" type="text" class="input w-full" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+              <label class="fieldset-label" for="token">Token</label>
+              <input id="token" v-model="draft.token" type="text" class="input w-full" autocomplete="off" />
+            </fieldset>
+
+            <fieldset class="fieldset">
+              <label class="fieldset-label" for="endpoint">服务地址（留空为正式环境）</label>
+              <input
+                id="endpoint"
+                v-model="draft.endpoint"
+                type="text"
+                class="input w-full"
+                placeholder="https://api-cloudstorage.tange365.com"
+              />
+            </fieldset>
+          </div>
+        </EditorDialog>
+
         <div class="flex flex-wrap items-end gap-3">
           <fieldset class="fieldset min-w-48 flex-1 sm:max-w-xs">
             <label class="fieldset-label" for="date">日期</label>
@@ -129,42 +250,6 @@ function handleCancelExport() {
 
           <button type="submit" class="btn btn-primary">查询</button>
           <span class="text-sm text-base-content/70">{{ session.status }}</span>
-        </div>
-
-        <div class="flex items-center justify-between gap-2">
-          <p v-if="!credentialsOpen" class="min-w-0 text-sm break-all text-base-content/70">
-            {{ credentialSummary }}
-          </p>
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm ms-auto shrink-0"
-            @click="credentialsOpen = !credentialsOpen"
-          >
-            {{ credentialsOpen ? '收起' : '修改' }}
-          </button>
-        </div>
-
-        <div v-if="credentialsOpen" class="grid grid-cols-1 gap-4">
-          <fieldset class="fieldset">
-            <label class="fieldset-label" for="app-id">App ID</label>
-            <input id="app-id" v-model="form.appId" type="text" class="input w-full" />
-          </fieldset>
-
-          <fieldset class="fieldset">
-            <label class="fieldset-label" for="token">Token</label>
-            <input id="token" v-model="form.token" type="text" class="input w-full" autocomplete="off" />
-          </fieldset>
-
-          <fieldset class="fieldset">
-            <label class="fieldset-label" for="endpoint">服务地址（留空为正式环境）</label>
-            <input
-              id="endpoint"
-              v-model="form.endpoint"
-              type="text"
-              class="input w-full"
-              placeholder="https://api-cloudstorage.tange365.com"
-            />
-          </fieldset>
         </div>
       </form>
 
