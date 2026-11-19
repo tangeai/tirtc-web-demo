@@ -109,10 +109,10 @@ function shortenMiddle(value, head = 4, tail = 4) {
   return `${value.slice(0, head)}…${value.slice(-tail)}`;
 }
 
-function maskToken(value) {
+function formatCredential(value) {
   const text = value.trim();
   if (!text) return '未填写';
-  return `••••${text.slice(-4)}`;
+  return shortenMiddle(text, 12, 8);
 }
 
 function formatEndpoint(value) {
@@ -120,12 +120,6 @@ function formatEndpoint(value) {
   if (!text) return '正式环境';
   return text.replace(/^https?:\/\//, '').replace(/\/+$/, '');
 }
-
-const credentialSummary = computed(() => {
-  const appId = form.appId.trim();
-  const appLabel = appId ? shortenMiddle(appId) : '未填写';
-  return `App ${appLabel} · Token ${maskToken(form.token)} · ${formatEndpoint(form.endpoint)}`;
-});
 
 // 已加载月份里，没有录像的日期不可选。其它月份仍可选，选中后再查那个月。
 function isDateDisabled(timestamp) {
@@ -194,20 +188,43 @@ function handleCancelExport() {
     <div class="card-body">
       <div class="flex items-center justify-between gap-2">
         <h2 class="card-title">录像查询</h2>
-        <div class="tooltip tooltip-left" data-tip="生成链接">
-          <RouterLink to="/play-url/cloud-storage" class="btn btn-ghost btn-sm btn-circle" aria-label="生成链接">
-            <IconLink class="h-4 w-4" />
-          </RouterLink>
+        <div class="flex items-center gap-1">
+          <button type="button" class="btn btn-ghost btn-sm" @click="openEditor">编辑</button>
+          <div class="tooltip tooltip-left" data-tip="生成链接">
+            <RouterLink to="/play-url/cloud-storage" class="btn btn-ghost btn-sm btn-circle" aria-label="生成链接">
+              <IconLink class="h-4 w-4" />
+            </RouterLink>
+          </div>
         </div>
       </div>
 
       <form class="space-y-3" @submit.prevent="handleQuery">
-        <div class="flex items-center justify-between gap-2">
-          <p class="min-w-0 text-sm break-all text-base-content/70">
-            {{ credentialSummary }}
-          </p>
-          <button type="button" class="btn btn-ghost btn-sm ms-auto shrink-0" @click="openEditor">修改</button>
-        </div>
+        <dl class="space-y-1 text-sm">
+          <div class="flex gap-3">
+            <dt class="w-18 shrink-0 text-base-content/50">App ID</dt>
+            <dd
+              class="min-w-0 flex-1 truncate font-mono"
+              :class="form.appId.trim() ? '' : 'text-warning'"
+              :title="form.appId"
+            >
+              {{ formatCredential(form.appId) }}
+            </dd>
+          </div>
+          <div class="flex gap-3">
+            <dt class="w-18 shrink-0 text-base-content/50">Token</dt>
+            <dd
+              class="min-w-0 flex-1 truncate font-mono"
+              :class="form.token.trim() ? '' : 'text-warning'"
+              :title="form.token"
+            >
+              {{ formatCredential(form.token) }}
+            </dd>
+          </div>
+          <div class="flex gap-3">
+            <dt class="w-18 shrink-0 text-base-content/50">服务地址</dt>
+            <dd class="min-w-0 flex-1 truncate" :title="form.endpoint">{{ formatEndpoint(form.endpoint) }}</dd>
+          </div>
+        </dl>
 
         <EditorDialog :open="editorOpen" title="连接凭证" @close="closeEditor" @confirm="confirmEditor">
           <div class="grid grid-cols-1 gap-4">
@@ -249,7 +266,7 @@ function handleCancelExport() {
           </fieldset>
 
           <button type="submit" class="btn btn-primary">查询</button>
-          <span class="text-sm text-base-content/70">{{ session.status }}</span>
+          <span class="flex h-10 items-center text-xs text-base-content/70">{{ session.status }}</span>
         </div>
       </form>
 
