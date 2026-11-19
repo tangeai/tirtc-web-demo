@@ -69,23 +69,26 @@ onUnmounted(() => {
     <AppContainer extraClass="space-y-2">
       <AppHeader title="云存回放" />
 
+      <canvas ref="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
+
       <div class="card bg-base-100 shadow-sm">
         <div class="card-body">
-          <canvas ref="canvas" class="block aspect-video w-full bg-neutral-900"></canvas>
-
-          <div class="mt-3 flex flex-wrap items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <button type="button" class="btn btn-sm" @click="handlePause">暂停</button>
             <button type="button" class="btn btn-sm" @click="handleResume">继续</button>
             <button type="button" class="btn btn-sm" @click="handleStop">停止</button>
-            <select
-              class="select select-sm w-auto"
-              :value="session.speed"
-              title="倍速，非 1 倍速静音"
-              @change="handleSpeed"
-            >
+
+            <!-- 倍速 -->
+            <select class="select select-sm w-auto" :value="session.speed" @change="handleSpeed">
               <option v-for="item in SPEEDS" :key="item" :value="String(item)">{{ item }}×</option>
             </select>
-            <span class="text-sm text-base-content/70">非 1 倍速静音</span>
+            <span
+              v-if="session.speed !== '1'"
+              class="tooltip tooltip-top text-xs text-base-content/50"
+              data-tip="非 1 倍速时静音"
+              >静音</span
+            >
+
             <span class="ms-auto text-sm text-base-content/70">{{ session.currentTime }}</span>
           </div>
         </div>
