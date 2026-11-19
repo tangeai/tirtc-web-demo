@@ -193,7 +193,7 @@ function handleCancelExport() {
   <div class="card bg-base-100 shadow-sm">
     <div class="card-body">
       <div class="flex items-center justify-between gap-2">
-        <h2 class="card-title">云存回放</h2>
+        <h2 class="card-title">录像查询</h2>
         <div class="tooltip tooltip-left" data-tip="生成链接">
           <RouterLink to="/play-url/cloud-storage" class="btn btn-ghost btn-sm btn-circle" aria-label="生成链接">
             <IconLink class="h-4 w-4" />

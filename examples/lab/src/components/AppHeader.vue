@@ -2,6 +2,10 @@
 import { useRoute } from 'vue-router';
 import { IconMenu } from '@/components/icons';
 
+defineProps({
+  title: { type: String, default: '' },
+});
+
 const route = useRoute();
 
 const links = [
@@ -22,7 +26,11 @@ function closeMenu(event) {
 <template>
   <div class="navbar bg-base-100 shadow-sm">
     <div class="navbar-start">
-      <RouterLink to="/device-player" aria-current-value="false" class="btn btn-ghost text-xl">TiRTC</RouterLink>
+      <RouterLink to="/device-player" aria-current-value="false" class="btn btn-ghost text-lg">TiRTC</RouterLink>
+    </div>
+
+    <div v-if="title" class="navbar-center">
+      <h1 class="text-base font-medium">{{ title }}</h1>
     </div>
 
     <div class="navbar-end">

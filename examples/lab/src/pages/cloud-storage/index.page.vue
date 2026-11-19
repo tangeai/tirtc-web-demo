@@ -67,7 +67,7 @@ onUnmounted(() => {
 <template>
   <n-config-provider :locale="zhCN" :date-locale="dateZhCN">
     <AppContainer extraClass="space-y-2">
-      <AppHeader />
+      <AppHeader title="云存回放" />
 
       <div class="card bg-base-100 shadow-sm">
         <div class="card-body">
