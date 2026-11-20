@@ -24,7 +24,7 @@ function closeMenu(event) {
 </script>
 
 <template>
-  <div class="navbar bg-base-100 shadow-sm">
+  <div class="h-12 min-h-12 navbar bg-base-100 shadow-sm">
     <div class="navbar-start">
       <RouterLink to="/device-player" aria-current-value="false" class="btn btn-ghost text-lg">TiRTC</RouterLink>
     </div>

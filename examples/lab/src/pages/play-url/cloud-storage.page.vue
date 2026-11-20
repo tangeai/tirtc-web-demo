@@ -86,9 +86,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <AppContainer extraClass="space-y-2">
-    <AppHeader />
+  <AppHeader />
 
+  <AppContainer extraClass="space-y-2">
     <!-- 申请云录像播放链接。SK 只用于本页签名，不会写入播放 URL -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">

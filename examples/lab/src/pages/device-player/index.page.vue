@@ -138,14 +138,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AppContainer extraClass="space-y-2">
-    <AppHeader title="实时直播" />
+  <AppHeader title="实时直播" />
 
+  <AppContainer extraClass="space-y-2">
     <canvas id="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
 
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
-
         <!-- 凭证摘要 -->
         <div class="mb-2 flex items-center justify-between gap-2">
           <p class="min-w-0 text-sm break-all text-base-content/70">{{ credentialSummary }}</p>

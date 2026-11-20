@@ -10,7 +10,7 @@ defineProps({
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4" :class="extraClass">
+  <div class="mx-auto max-w-3xl p-2" :class="extraClass">
     <slot />
   </div>
 </template>

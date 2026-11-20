@@ -74,9 +74,9 @@ const openPlayerIframe = () => {
 </script>
 
 <template>
-  <AppContainer extraClass="space-y-2">
-    <AppHeader />
+  <AppHeader />
 
+  <AppContainer extraClass="space-y-2">
     <!-- 公共参数卡片 -->
     <div class="p-1 card bg-base-100 card-sm shadow-sm">
       <div class="card-body">

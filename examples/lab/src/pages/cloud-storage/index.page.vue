@@ -96,12 +96,12 @@ onUnmounted(() => {
 
 <template>
   <n-config-provider :locale="zhCN" :date-locale="dateZhCN">
+    <AppHeader title="云存回放" />
+    
     <AppContainer extraClass="space-y-2">
-      <AppHeader title="云存回放" />
-
       <div class="relative">
         <canvas ref="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
-        
+
         <div
           class="absolute inset-x-1.5 bottom-0 pt-2"
           :class="seekable ? 'cursor-pointer' : ''"
