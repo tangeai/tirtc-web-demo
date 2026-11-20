@@ -11,7 +11,6 @@ const session = reactive({
   status: '',
   days: [],
   recordings: [],
-  loadedMonth: '',
   queried: false,
   speed: '1',
   currentTime: '--:--:--',

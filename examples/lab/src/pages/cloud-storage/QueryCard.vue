@@ -1,8 +1,9 @@
 <script setup lang="jsx">
 import { computed, reactive, ref, Teleport } from 'vue';
+import dayjs from 'dayjs';
 import { NDatePicker } from 'naive-ui';
 import { IconLink } from '@/components/icons';
-import { readUrlParams, formatTime } from './index.module.js';
+import { dateRangeError, formatTime, readUrlParams, recentDayTimestamps } from './index.module.js';
 
 // 不用 showModal，浏览器不会处理 Esc。关闭函数记在这里，弹层卸掉时一起卸掉监听。
 let escapeBinding = null;
@@ -79,10 +80,25 @@ const props = defineProps({
   session: { type: Object, required: true },
 });
 
-const form = reactive(readUrlParams());
+const params = readUrlParams();
+const form = reactive({
+  appId: params.appId,
+  token: params.token,
+  endpoint: params.endpoint,
+});
+// 查询范围和当前选中的某一天分开。改范围不会自动查询，点「查询」才查。
+// format 用 yyyy-MM-dd，这是 Naive UI（date-fns）的写法，不是 dayjs 的 YYYY-MM-DD。
+const dateRange = ref([params.startDate, params.endDate]);
+const selectedDate = ref('');
 // 卡片上只留一行概览。弹层里改的是草稿，确定才写回 form，取消丢弃。
 const editorOpen = ref(false);
 const draft = reactive({ appId: '', token: '', endpoint: '' });
+
+// 含今天。shortcuts 要的是时间戳。
+const dateShortcuts = {
+  最近7天: () => recentDayTimestamps(7),
+  最近30天: () => recentDayTimestamps(30),
+};
 
 function openEditor() {
   draft.appId = form.appId;
@@ -121,23 +137,22 @@ function formatEndpoint(value) {
   return text.replace(/^https?:\/\//, '').replace(/\/+$/, '');
 }
 
-// 已加载月份里，没有录像的日期不可选。其它月份仍可选，选中后再查那个月。
-function isDateDisabled(timestamp) {
-  if (!props.session.loadedMonth) return false;
-  const date = new Date(timestamp).toLocaleDateString('sv-SE');
-  if (date === form.date || date.slice(0, 7) !== props.session.loadedMonth) return false;
-  return !props.session.days.some((day) => day.date === date && day.hasRecording);
+// 还没到的日期没有录像。超过 31 天留到点「查询」时再提示。
+function isFutureDate(timestamp) {
+  return dayjs(timestamp).startOf('day').isAfter(dayjs().startOf('day'));
 }
 
 function applyResult(result) {
   props.session.days = result.days;
   props.session.recordings = result.recordings;
-  props.session.loadedMonth = result.month;
+  selectedDate.value = result.selectedDate || '';
 }
 
 async function handleQuery() {
-  if (!form.date) {
-    props.session.status = '请选择日期';
+  const [startDate, endDate] = dateRange.value || [];
+  const rangeError = dateRangeError(startDate, endDate);
+  if (rangeError) {
+    props.session.status = rangeError;
     return;
   }
   if (!form.appId.trim()) {
@@ -156,17 +171,17 @@ async function handleQuery() {
     appId: form.appId.trim(),
     token: form.token.trim(),
     endpoint: form.endpoint.trim(),
-    date: form.date,
+    startDate,
+    endDate,
     speed: Number(props.session.speed),
   });
   if (result.ready) props.session.queried = true;
   applyResult(result);
 }
 
-// 换日期只重新查询，不重新 init
+// 点某一天只重查这一天，不重新 init
 async function loadDate(date) {
   if (!props.session.queried || !date || !props.player) return;
-  form.date = date;
   applyResult(await props.player.selectDate(date));
 }
 
@@ -252,25 +267,26 @@ function handleCancelExport() {
         </EditorDialog>
 
         <div class="flex flex-wrap items-end gap-3">
-          <fieldset class="fieldset min-w-48 flex-1 sm:max-w-xs">
+          <fieldset class="fieldset min-w-60 max-w-90 flex-1">
             <label class="fieldset-label" for="date">日期</label>
             <n-date-picker
               id="date"
-              v-model:formatted-value="form.date"
+              v-model:formatted-value="dateRange"
               class="w-full"
-              type="date"
+              type="daterange"
               format="yyyy-MM-dd"
-              :is-date-disabled="isDateDisabled"
-              @update:formatted-value="loadDate"
+              :shortcuts="dateShortcuts"
+              :is-date-disabled="isFutureDate"
             />
           </fieldset>
 
           <div class="flex h-11 items-center">
             <button type="submit" class="btn btn-primary btn-sm">查询</button>
           </div>
-
-          <span class="flex h-10 items-center text-xs text-base-content/70">{{ session.status }}</span>
         </div>
+
+        <!-- 播放、跳转也会改这条状态 -->
+        <p v-if="session.status" class="text-xs text-base-content/60" role="status">{{ session.status }}</p>
       </form>
 
       <div v-if="recordingDays.length" class="mt-4 flex flex-wrap gap-2">
@@ -279,7 +295,7 @@ function handleCancelExport() {
           :key="day.date"
           type="button"
           class="btn btn-sm"
-          :class="day.date === form.date ? 'btn-primary' : 'btn-outline'"
+          :class="day.date === selectedDate ? 'btn-primary' : 'btn-outline'"
           :title="day.date"
           @click="loadDate(day.date)"
         >

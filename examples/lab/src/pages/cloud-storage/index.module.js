@@ -1,19 +1,63 @@
+import dayjs from 'dayjs';
 import { TiCloudStorage, TiCloudStorageVideoOutput, TiCloudStorageAudioOutput } from '@/libs/tirtc';
 
-// 云存回放示例：init → 查当月有录像的日期 → 查选中那天 → 播放 / 导出。
+// 云存回放示例：init → 查所选范围内有录像的日期 → 查选中那天 → 播放 / 导出。
 // 时区只用浏览器时区，保证 listRecordingDays 的自然日和 listRecordings 的本地 00:00 是同一天。
+// listRecordingDays 一次最多 31 天。录像段仍按天查：listRecordings 一次最长 10 天，列表也是按天展示。
 
 const EXPORT_MAX_MS = 60 * 1000;
 const EXPORT_HINT = '点录像段右侧的「导出」，下载该段前 60 秒的 MP4';
 const SPEEDS = [0.125, 0.25, 0.5, 1, 2, 4, 8];
+const MAX_QUERY_DAYS = 31;
+
+// YYYY-MM-DD 按浏览器本地零点解析。直接 dayjs('YYYY-MM-DD') 会当成 UTC 零点，西时区会偏到前一天。
+function parseDay(dateValue) {
+  const [year, month, day] = String(dateValue ?? '').split('-').map(Number);
+  if (!year || !month || !day) return dayjs(Number.NaN);
+  return dayjs(new Date(year, month - 1, day));
+}
+
+function formatDay(value) {
+  return value.format('YYYY-MM-DD');
+}
+
+function isDayString(value) {
+  const parsed = parseDay(value);
+  return parsed.isValid() && formatDay(parsed) === value;
+}
+
+// 含今天。最近 7 天是今天往前 6 天，不是往前 7 天。
+function recentDays(count) {
+  const end = dayjs().startOf('day');
+  const start = end.subtract(count - 1, 'day');
+  return { startDate: formatDay(start), endDate: formatDay(end) };
+}
+
+// Naive UI 的 shortcuts 要时间戳，不是日期字符串。
+function recentDayTimestamps(count) {
+  const end = dayjs().startOf('day');
+  const start = end.subtract(count - 1, 'day');
+  return [start.valueOf(), end.valueOf()];
+}
+
+// 起止都包含。超过 31 天不发请求，和云存服务端一致。
+function dateRangeError(startDate, endDate) {
+  if (!isDayString(startDate) || !isDayString(endDate)) return '请选择日期';
+  const days = parseDay(endDate).diff(parseDay(startDate), 'day') + 1;
+  if (days < 1) return '请选择日期';
+  if (days > MAX_QUERY_DAYS) return '一次最多查询 31 天';
+  return '';
+}
 
 function readUrlParams() {
   const search = new URLSearchParams(window.location.search);
+  const { startDate, endDate } = recentDays(7);
   return {
     appId: search.get('app_id') || '',
     token: search.get('token') || '',
     endpoint: search.get('endpoint') || '',
-    date: search.get('date') || new Date().toLocaleDateString('sv-SE'),
+    startDate,
+    endDate,
   };
 }
 
@@ -21,25 +65,17 @@ function browserTimeZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai';
 }
 
-// 选中日期所在月份。起止都包含，单月不会超过 31 天
-function monthRange(dateValue) {
-  const [year, month] = dateValue.split('-').map(Number);
-  const lastDay = new Date(year, month, 0).getDate();
-  const pad = (value) => String(value).padStart(2, '0');
-  return { startDate: `${year}-${pad(month)}-01`, endDate: `${year}-${pad(month)}-${pad(lastDay)}` };
-}
-
 // 当地时间当天 00:00 到次日 00:00
 function dayRangeMs(dateValue) {
-  const [year, month, day] = dateValue.split('-').map(Number);
+  const start = parseDay(dateValue);
   return {
-    dayStartMs: new Date(year, month - 1, day).getTime(),
-    nextDayStartMs: new Date(year, month - 1, day + 1).getTime(),
+    dayStartMs: start.valueOf(),
+    nextDayStartMs: start.add(1, 'day').valueOf(),
   };
 }
 
 function formatTime(ms) {
-  return new Date(ms).toLocaleTimeString('zh-CN', { hour12: false });
+  return dayjs(ms).format('HH:mm:ss');
 }
 
 function downloadMp4(blob, startTimeMs) {
@@ -62,7 +98,6 @@ class SampleCloudStorage {
     this.replay = null;
     this.exportTask = null;
     this.days = [];
-    this.loadedMonth = '';
     this.speed = 1;
     // 本次播放的绝对时间区间。进度和跳转都用它。手动停止、出错、重新查询后清空；播完保留。
     this.range = null;
@@ -71,18 +106,25 @@ class SampleCloudStorage {
     this.audioOutput = new TiCloudStorageAudioOutput();
   }
 
-  snapshot(ok, recordings = []) {
+  snapshot(ok, recordings = [], selectedDate = '') {
     return {
       ok,
       ready: Boolean(this.cloudStorage),
       days: this.days,
       recordings,
-      month: this.loadedMonth,
+      selectedDate,
     };
   }
 
-  // 点「查询」才 init。改日期不会重新初始化，改 App ID / Token / 服务地址后需要再点一次查询。
-  async query({ appId, token, endpoint, date, speed }) {
+  // 点「查询」才 init。改日期范围也要再点查询；只点某一天不会重新初始化。
+  // 改 App ID / Token / 服务地址后同样需要再点一次查询。
+  async query({ appId, token, endpoint, startDate, endDate, speed }) {
+    const rangeError = dateRangeError(startDate, endDate);
+    if (rangeError) {
+      this.onStatus(rangeError);
+      return this.snapshot(false);
+    }
+
     this.resetExport();
     this.onExportStatus(EXPORT_HINT);
     this.clearPlayback();
@@ -90,7 +132,6 @@ class SampleCloudStorage {
     this.replay = null;
     this.cloudStorage = null;
     this.days = [];
-    this.loadedMonth = '';
     this.onStatus('查询中...');
 
     const code = await TiCloudStorage.init({ appId, endpoint });
@@ -101,7 +142,7 @@ class SampleCloudStorage {
 
     this.cloudStorage = new TiCloudStorage(token);
     this.mountReplay(speed);
-    return this.loadMonth(date);
+    return this.loadRange(startDate, endDate);
   }
 
   mountReplay(speed) {
@@ -125,7 +166,7 @@ class SampleCloudStorage {
     this.audioOutput.attach(this.replay, 0);
   }
 
-  // 换月再查 listRecordingDays；同一个月只更新选中那天的录像段
+  // 日期按钮只重查这一天。范围已经在点「查询」时拉过，这里不再 listRecordingDays，也不重新 init。
   async selectDate(date) {
     if (!this.cloudStorage) {
       this.onStatus('请先查询');
@@ -134,41 +175,43 @@ class SampleCloudStorage {
 
     this.onStatus('查询中...');
     this.stop();
-    if (date.slice(0, 7) !== this.loadedMonth) return this.loadMonth(date);
     return this.loadDay(date);
   }
 
-  async loadMonth(date) {
-    const { startDate, endDate } = monthRange(date);
+  async loadRange(startDate, endDate) {
     const { code, days } = await this.cloudStorage.listRecordingDays(startDate, endDate, this.timeZoneId);
     if (code !== 0) {
       this.days = [];
-      this.loadedMonth = '';
       this.onStatus(`日期查询失败：${code}`);
       return this.snapshot(false);
     }
 
     this.days = days;
-    this.loadedMonth = date.slice(0, 7);
-    return this.loadDay(date);
+    // 范围内有录像时，先打开最近的一天。其它天用日期按钮切换。
+    const latest = [...days].reverse().find((day) => day.hasRecording);
+    if (!latest) {
+      this.onStatus('这段时间没有录像');
+      return this.snapshot(true);
+    }
+    return this.loadDay(latest.date);
   }
 
   async loadDay(date) {
     const selected = this.days.find((day) => day.date === date);
     if (!selected?.hasRecording) {
       this.onStatus('这一天没有录像');
-      return this.snapshot(true);
+      return this.snapshot(true, [], date);
     }
 
     const { dayStartMs, nextDayStartMs } = dayRangeMs(date);
     const { code, recordings } = await this.cloudStorage.listRecordings(dayStartMs, nextDayStartMs);
     if (code !== 0) {
       this.onStatus(`查询失败：${code}`);
-      return this.snapshot(false);
+      return this.snapshot(false, [], date);
     }
 
     this.onStatus(`共 ${recordings.length} 段录像`);
-    return this.snapshot(true, recordings);
+    return this.snapshot(true, recordings, date);
   }
 
   play(range) {
@@ -327,4 +370,4 @@ class SampleCloudStorage {
   }
 }
 
-export { SPEEDS, EXPORT_HINT, readUrlParams, formatTime, SampleCloudStorage };
+export { SPEEDS, EXPORT_HINT, readUrlParams, formatTime, recentDayTimestamps, dateRangeError, SampleCloudStorage };
