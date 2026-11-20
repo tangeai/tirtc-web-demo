@@ -6,13 +6,15 @@ import { TiCloudStorage, TiCloudStorageVideoOutput, TiCloudStorageAudioOutput } 
 // listRecordingDays 一次最多 31 天。录像段仍按天查：listRecordings 一次最长 10 天，列表也是按天展示。
 
 const EXPORT_MAX_MS = 60 * 1000;
-const EXPORT_HINT = '点录像段右侧的「导出」，下载该段前 60 秒的 MP4';
+const EXPORT_TIP = `下载该段前 ${EXPORT_MAX_MS / 1000} 秒`;
 const SPEEDS = [0.125, 0.25, 0.5, 1, 2, 4, 8];
 const MAX_QUERY_DAYS = 31;
 
 // YYYY-MM-DD 按浏览器本地零点解析。直接 dayjs('YYYY-MM-DD') 会当成 UTC 零点，西时区会偏到前一天。
 function parseDay(dateValue) {
-  const [year, month, day] = String(dateValue ?? '').split('-').map(Number);
+  const [year, month, day] = String(dateValue ?? '')
+    .split('-')
+    .map(Number);
   if (!year || !month || !day) return dayjs(Number.NaN);
   return dayjs(new Date(year, month - 1, day));
 }
@@ -78,6 +80,16 @@ function formatTime(ms) {
   return dayjs(ms).format('HH:mm:ss');
 }
 
+// 不足 1 小时是「分:秒」，分不补零，例如 3:15。满 1 小时再带上小时，例如 1:02:05。
+function formatDuration(startMs, endMs) {
+  const totalSeconds = Math.max(0, Math.round((endMs - startMs) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, '0')}:${seconds}`;
+  return `${minutes}:${seconds}`;
+}
+
 function downloadMp4(blob, startTimeMs) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -126,7 +138,7 @@ class SampleCloudStorage {
     }
 
     this.resetExport();
-    this.onExportStatus(EXPORT_HINT);
+    this.onExportStatus('');
     this.clearPlayback();
     this.replay?.dispose();
     this.replay = null;
@@ -370,4 +382,13 @@ class SampleCloudStorage {
   }
 }
 
-export { SPEEDS, EXPORT_HINT, readUrlParams, formatTime, recentDayTimestamps, dateRangeError, SampleCloudStorage };
+export {
+  SPEEDS,
+  EXPORT_TIP,
+  readUrlParams,
+  formatTime,
+  formatDuration,
+  recentDayTimestamps,
+  dateRangeError,
+  SampleCloudStorage,
+};

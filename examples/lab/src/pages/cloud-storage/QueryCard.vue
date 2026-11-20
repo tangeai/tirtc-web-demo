@@ -3,7 +3,14 @@ import { computed, reactive, ref, Teleport } from 'vue';
 import dayjs from 'dayjs';
 import { NDatePicker } from 'naive-ui';
 import { IconLink } from '@/components/icons';
-import { dateRangeError, formatTime, readUrlParams, recentDayTimestamps } from './index.module.js';
+import {
+  EXPORT_TIP,
+  dateRangeError,
+  formatDuration,
+  formatTime,
+  readUrlParams,
+  recentDayTimestamps,
+} from './index.module.js';
 
 // 不用 showModal，浏览器不会处理 Esc。关闭函数记在这里，弹层卸掉时一起卸掉监听。
 let escapeBinding = null;
@@ -199,7 +206,7 @@ function handleCancelExport() {
 </script>
 
 <template>
-  <div class="card bg-base-100 shadow-sm">
+  <div class="card card-sm bg-base-100 shadow-sm">
     <div class="card-body">
       <div class="flex items-center justify-between gap-2">
         <h2 class="card-title text-base">录像查询</h2>
@@ -303,7 +310,8 @@ function handleCancelExport() {
         </button>
       </div>
 
-      <div class="mt-4 flex flex-wrap items-center gap-2">
+      <!-- 空着不渲染。用法写在导出按钮上，这里只留进行中、完成和失败。 -->
+      <div v-if="session.exporting || session.exportStatus" class="mt-4 flex flex-wrap items-center gap-2">
         <button
           v-if="session.exporting"
           type="button"
@@ -315,23 +323,27 @@ function handleCancelExport() {
         <span class="text-sm text-base-content/70">{{ session.exportStatus }}</span>
       </div>
 
-      <div v-if="session.recordings.length" class="mt-3 overflow-hidden rounded-lg border border-base-300">
+      <div v-if="session.recordings.length" class="mt-3 rounded-lg border border-base-300">
         <div
           v-for="range in session.recordings"
           :key="range.startTimeMs"
           class="flex items-center gap-2 border-b border-base-300 px-3 py-2 last:border-b-0"
         >
-          <button type="button" class="btn btn-link btn-sm h-auto min-h-0 px-0" @click="handlePlay(range)">
+          <span class="min-w-0 text-xs sm:text-sm">
             {{ formatTime(range.startTimeMs) }} - {{ formatTime(range.endTimeMs) }}
-          </button>
-          <button
-            type="button"
-            class="btn btn-outline btn-primary btn-sm ms-auto"
-            :disabled="session.exporting"
-            @click="handleExport(range)"
-          >
-            导出
-          </button>
+            <span class="text-base-content/50"> · {{ formatDuration(range.startTimeMs, range.endTimeMs) }}</span>
+          </span>
+          <button type="button" class="btn btn-sm ms-auto" @click="handlePlay(range)">播放</button>
+          <div class="tooltip tooltip-left" :data-tip="EXPORT_TIP">
+            <button
+              type="button"
+              class="btn btn-outline btn-primary btn-sm"
+              :disabled="session.exporting"
+              @click="handleExport(range)"
+            >
+              导出
+            </button>
+          </div>
         </div>
       </div>
     </div>

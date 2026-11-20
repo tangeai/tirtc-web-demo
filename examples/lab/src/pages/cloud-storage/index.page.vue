@@ -3,7 +3,7 @@ import { computed, reactive, ref, shallowRef, onMounted, onUnmounted } from 'vue
 import { NConfigProvider, zhCN, dateZhCN } from 'naive-ui';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
-import { EXPORT_HINT, SPEEDS, SampleCloudStorage } from './index.module.js';
+import { SPEEDS, SampleCloudStorage } from './index.module.js';
 import QueryCard from './QueryCard.vue';
 
 // 播放器回调和查询卡片共用这一份状态。表单输入留在查询卡片里。
@@ -18,7 +18,7 @@ const session = reactive({
   rangeStartMs: 0,
   rangeEndMs: 0,
   currentTimeMs: 0,
-  exportStatus: EXPORT_HINT,
+  exportStatus: '',
   exporting: false,
 });
 
@@ -96,7 +96,7 @@ onUnmounted(() => {
 <template>
   <n-config-provider :locale="zhCN" :date-locale="dateZhCN">
     <AppHeader title="云存回放" />
-    
+
     <AppContainer extraClass="space-y-2">
       <div class="relative">
         <canvas ref="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
@@ -118,7 +118,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="card bg-base-100 shadow-sm">
+      <div class="card card-sm bg-base-100 shadow-sm">
         <div class="card-body">
           <div class="flex flex-wrap items-center gap-2">
             <button type="button" class="btn btn-sm" @click="handlePause">暂停</button>
