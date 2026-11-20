@@ -187,7 +187,7 @@ function handleCancelExport() {
   <div class="card bg-base-100 shadow-sm">
     <div class="card-body">
       <div class="flex items-center justify-between gap-2">
-        <h2 class="card-title">录像查询</h2>
+        <h2 class="card-title text-base">录像查询</h2>
         <div class="flex items-center gap-1">
           <button type="button" class="btn btn-ghost btn-sm" @click="openEditor">编辑</button>
           <div class="tooltip tooltip-left" data-tip="生成链接">
@@ -201,7 +201,7 @@ function handleCancelExport() {
       <form class="space-y-3" @submit.prevent="handleQuery">
         <dl class="space-y-1 text-sm">
           <div class="flex gap-3">
-            <dt class="w-18 shrink-0 text-base-content/50">App ID</dt>
+            <dt class="w-16 shrink-0 text-base-content/50 text-xs">App ID</dt>
             <dd
               class="min-w-0 flex-1 truncate font-mono"
               :class="form.appId.trim() ? '' : 'text-warning'"
@@ -211,7 +211,7 @@ function handleCancelExport() {
             </dd>
           </div>
           <div class="flex gap-3">
-            <dt class="w-18 shrink-0 text-base-content/50">Token</dt>
+            <dt class="w-16 shrink-0 text-base-content/50 text-xs">Token</dt>
             <dd
               class="min-w-0 flex-1 truncate font-mono"
               :class="form.token.trim() ? '' : 'text-warning'"
@@ -221,7 +221,7 @@ function handleCancelExport() {
             </dd>
           </div>
           <div class="flex gap-3">
-            <dt class="w-18 shrink-0 text-base-content/50">服务地址</dt>
+            <dt class="w-16 shrink-0 text-base-content/50 text-xs">服务地址</dt>
             <dd class="min-w-0 flex-1 truncate" :title="form.endpoint">{{ formatEndpoint(form.endpoint) }}</dd>
           </div>
         </dl>
@@ -265,7 +265,10 @@ function handleCancelExport() {
             />
           </fieldset>
 
-          <button type="submit" class="btn btn-primary">查询</button>
+          <div class="flex h-11 items-center">
+            <button type="submit" class="btn btn-primary btn-sm">查询</button>
+          </div>
+
           <span class="flex h-10 items-center text-xs text-base-content/70">{{ session.status }}</span>
         </div>
       </form>
