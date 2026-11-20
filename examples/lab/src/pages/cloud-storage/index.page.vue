@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, shallowRef, onMounted, onUnmounted } from 'vue';
+import { computed, reactive, ref, shallowRef, onMounted, onUnmounted } from 'vue';
 import { NConfigProvider, zhCN, dateZhCN } from 'naive-ui';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
@@ -15,8 +15,22 @@ const session = reactive({
   queried: false,
   speed: '1',
   currentTime: '--:--:--',
+  // 下面三个都是录像绝对时间（毫秒），不是从 0 开始的播放进度。区间为空表示没在播。
+  rangeStartMs: 0,
+  rangeEndMs: 0,
+  currentTimeMs: 0,
   exportStatus: EXPORT_HINT,
   exporting: false,
+});
+
+// 区间还在就可以点。播完也留着区间，进度停在终点。
+const seekable = computed(() => session.rangeEndMs > session.rangeStartMs);
+
+// 当前时间在本次播放区间里的位置。区间为空时为 0。
+const progress = computed(() => {
+  const span = session.rangeEndMs - session.rangeStartMs;
+  if (span <= 0) return 0;
+  return Math.min(1, Math.max(0, (session.currentTimeMs - session.rangeStartMs) / span));
 });
 
 const canvas = ref(null);
@@ -40,14 +54,30 @@ function handleSpeed(event) {
   session.speed = String(next ?? event.target.value);
 }
 
+// 点击位置换成绝对时间。seek 要求 timeMs < end，贴到末尾会被拒绝，所以最多停在结束前 1ms。
+function handleSeek(event) {
+  if (!seekable.value) return;
+
+  const span = session.rangeEndMs - session.rangeStartMs;
+  if (span <= 0) return;
+
+  const rect = event.currentTarget.getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+  const timeMs = Math.min(session.rangeStartMs + ratio * span, session.rangeEndMs - 1);
+  player.value?.seek(timeMs);
+}
+
 onMounted(() => {
   player.value = new SampleCloudStorage({
     view: canvas.value,
     onStatus: (text) => {
       session.status = text;
     },
-    onTime: (text) => {
+    onTime: ({ text, currentTimeMs, startTimeMs, endTimeMs }) => {
       session.currentTime = text;
+      session.currentTimeMs = currentTimeMs;
+      session.rangeStartMs = startTimeMs;
+      session.rangeEndMs = endTimeMs;
     },
     onExportStatus: (text) => {
       session.exportStatus = text;
@@ -69,7 +99,25 @@ onUnmounted(() => {
     <AppContainer extraClass="space-y-2">
       <AppHeader title="云存回放" />
 
-      <canvas ref="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
+      <div class="relative">
+        <canvas ref="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
+        
+        <div
+          class="absolute inset-x-1.5 bottom-0 pt-2"
+          :class="seekable ? 'cursor-pointer' : ''"
+          role="slider"
+          aria-label="播放进度"
+          :aria-valuemin="session.rangeStartMs"
+          :aria-valuemax="session.rangeEndMs"
+          :aria-valuenow="seekable ? session.currentTimeMs : 0"
+          :aria-disabled="!seekable"
+          @click="handleSeek"
+        >
+          <div class="h-1 overflow-hidden rounded-full bg-white/40">
+            <div class="h-full rounded-full bg-primary" :style="{ width: `${progress * 100}%` }"></div>
+          </div>
+        </div>
+      </div>
 
       <div class="card bg-base-100 shadow-sm">
         <div class="card-body">

@@ -64,6 +64,8 @@ class SampleCloudStorage {
     this.days = [];
     this.loadedMonth = '';
     this.speed = 1;
+    // 本次播放的绝对时间区间。进度和跳转都用它。手动停止、出错、重新查询后清空；播完保留。
+    this.range = null;
     this.timeZoneId = browserTimeZone();
     this.videoOutput = new TiCloudStorageVideoOutput({ view });
     this.audioOutput = new TiCloudStorageAudioOutput();
@@ -83,6 +85,7 @@ class SampleCloudStorage {
   async query({ appId, token, endpoint, date, speed }) {
     this.resetExport();
     this.onExportStatus(EXPORT_HINT);
+    this.clearPlayback();
     this.replay?.dispose();
     this.replay = null;
     this.cloudStorage = null;
@@ -108,9 +111,16 @@ class SampleCloudStorage {
 
     this.replay.setSpeed(Number(speed ?? this.speed));
     this.speed = this.replay.speed;
-    this.replay.onTimeChanged = (timeMs) => this.onTime(formatTime(timeMs));
-    this.replay.onCompleted = () => this.onStatus('播放完成');
-    this.replay.onError = (errorCode) => this.onStatus(`播放失败：${errorCode}`);
+    this.replay.onTimeChanged = (timeMs) => this.notifyTime(timeMs);
+    // SDK 在回调前已经清掉 session，最后一帧也常略早于终点，所以界面停在区间终点。
+    this.replay.onCompleted = () => {
+      this.onStatus('播放完成');
+      this.notifyTime(this.range?.endTimeMs);
+    };
+    this.replay.onError = (errorCode) => {
+      this.onStatus(`播放失败：${errorCode}`);
+      this.clearPlayback();
+    };
     this.videoOutput.attach(this.replay, 0);
     this.audioOutput.attach(this.replay, 0);
   }
@@ -123,7 +133,7 @@ class SampleCloudStorage {
     }
 
     this.onStatus('查询中...');
-    this.replay?.stop();
+    this.stop();
     if (date.slice(0, 7) !== this.loadedMonth) return this.loadMonth(date);
     return this.loadDay(date);
   }
@@ -167,9 +177,36 @@ class SampleCloudStorage {
       return;
     }
 
-    const code = this.replay.play(range.startTimeMs, range.endTimeMs);
-    const label = `${formatTime(range.startTimeMs)} - ${formatTime(range.endTimeMs)}`;
-    this.onStatus(code === 0 ? `播放 ${label}` : `播放失败：${code}`);
+    const { startTimeMs, endTimeMs } = range;
+    const code = this.replay.play(startTimeMs, endTimeMs);
+    const label = `${formatTime(startTimeMs)} - ${formatTime(endTimeMs)}`;
+    if (code !== 0) {
+      this.onStatus(`播放失败：${code}`);
+      return;
+    }
+
+    this.range = { startTimeMs, endTimeMs };
+    this.notifyTime(startTimeMs);
+    this.onStatus(`播放 ${label}`);
+  }
+
+  // 跳到绝对时间，并立刻把界面拨过去。timeMs 必须落在 [start, end) 里。
+  // 播完后 session 已经没了，replay.seek 会失败，这时用记住的区间重新 play。
+  seek(timeMs) {
+    if (!this.replay || !this.range) {
+      this.onStatus('请先播放');
+      return;
+    }
+
+    const { startTimeMs, endTimeMs } = this.range;
+    let code = this.replay.seek(timeMs);
+    if (code !== 0) code = this.replay.play(startTimeMs, endTimeMs, timeMs);
+    if (code !== 0) {
+      this.onStatus(`跳转失败：${code}`);
+      return;
+    }
+
+    this.notifyTime(timeMs);
   }
 
   pause() {
@@ -182,6 +219,28 @@ class SampleCloudStorage {
 
   stop() {
     this.replay?.stop();
+    this.clearPlayback();
+  }
+
+  // 每次都交出当时的完整播放状态。没有区间或没有时间，就是还没在播。
+  notifyTime(timeMs) {
+    const range = this.range;
+    if (!range || !Number.isFinite(timeMs)) {
+      this.onTime({ text: '--:--:--', currentTimeMs: 0, startTimeMs: 0, endTimeMs: 0 });
+      return;
+    }
+
+    this.onTime({
+      text: formatTime(timeMs),
+      currentTimeMs: timeMs,
+      startTimeMs: range.startTimeMs,
+      endTimeMs: range.endTimeMs,
+    });
+  }
+
+  clearPlayback() {
+    this.range = null;
+    this.notifyTime();
   }
 
   // 倍速 0.125 ~ 8 七档，播放前后都可以切。失败时回退到当前速度。
