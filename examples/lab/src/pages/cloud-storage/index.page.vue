@@ -1,6 +1,5 @@
 <script setup>
 import { computed, reactive, ref, shallowRef, onMounted, onUnmounted } from 'vue';
-import { NConfigProvider, zhCN, dateZhCN } from 'naive-ui';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
 import { SPEEDS, SampleCloudStorage } from './index.module.js';
@@ -94,54 +93,52 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <n-config-provider :locale="zhCN" :date-locale="dateZhCN">
-    <AppHeader title="云存回放" />
+  <AppHeader title="云存回放" />
 
-    <AppContainer extraClass="space-y-2">
-      <div class="relative">
-        <canvas ref="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
+  <AppContainer extraClass="space-y-2">
+    <div class="relative">
+      <canvas ref="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
 
-        <div
-          class="absolute inset-x-1.5 bottom-0 pt-2"
-          :class="seekable ? 'cursor-pointer' : ''"
-          role="slider"
-          aria-label="播放进度"
-          :aria-valuemin="session.rangeStartMs"
-          :aria-valuemax="session.rangeEndMs"
-          :aria-valuenow="seekable ? session.currentTimeMs : 0"
-          :aria-disabled="!seekable"
-          @click="handleSeek"
-        >
-          <div class="h-1 overflow-hidden rounded-full bg-white/40">
-            <div class="h-full rounded-full bg-primary" :style="{ width: `${progress * 100}%` }"></div>
-          </div>
+      <div
+        class="absolute inset-x-1.5 bottom-0 pt-2"
+        :class="seekable ? 'cursor-pointer' : ''"
+        role="slider"
+        aria-label="播放进度"
+        :aria-valuemin="session.rangeStartMs"
+        :aria-valuemax="session.rangeEndMs"
+        :aria-valuenow="seekable ? session.currentTimeMs : 0"
+        :aria-disabled="!seekable"
+        @click="handleSeek"
+      >
+        <div class="h-1 overflow-hidden rounded-full bg-white/40">
+          <div class="h-full rounded-full bg-primary" :style="{ width: `${progress * 100}%` }"></div>
         </div>
       </div>
+    </div>
 
-      <div class="card card-sm bg-base-100 shadow-sm">
-        <div class="card-body">
-          <div class="flex flex-wrap items-center gap-2">
-            <button type="button" class="btn btn-sm" @click="handlePause">暂停</button>
-            <button type="button" class="btn btn-sm" @click="handleResume">继续</button>
-            <button type="button" class="btn btn-sm" @click="handleStop">停止</button>
+    <div class="card card-sm bg-base-100 shadow-sm">
+      <div class="card-body">
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="btn btn-sm" @click="handlePause">暂停</button>
+          <button type="button" class="btn btn-sm" @click="handleResume">继续</button>
+          <button type="button" class="btn btn-sm" @click="handleStop">停止</button>
 
-            <!-- 倍速 -->
-            <select class="select select-sm w-auto" :value="session.speed" @change="handleSpeed">
-              <option v-for="item in SPEEDS" :key="item" :value="String(item)">{{ item }}×</option>
-            </select>
-            <span
-              v-if="session.speed !== '1'"
-              class="tooltip tooltip-top text-xs text-base-content/50"
-              data-tip="非 1 倍速时静音"
-              >静音</span
-            >
+          <!-- 倍速 -->
+          <select class="select select-sm w-auto" :value="session.speed" @change="handleSpeed">
+            <option v-for="item in SPEEDS" :key="item" :value="String(item)">{{ item }}×</option>
+          </select>
+          <span
+            v-if="session.speed !== '1'"
+            class="tooltip tooltip-top text-xs text-base-content/50"
+            data-tip="非 1 倍速时静音"
+            >静音</span
+          >
 
-            <span class="ms-auto text-sm text-base-content/70">{{ session.currentTime }}</span>
-          </div>
+          <span class="ms-auto text-sm text-base-content/70">{{ session.currentTime }}</span>
         </div>
       </div>
+    </div>
 
-      <QueryCard :player="player" :session="session" />
-    </AppContainer>
-  </n-config-provider>
+    <QueryCard :player="player" :session="session" />
+  </AppContainer>
 </template>

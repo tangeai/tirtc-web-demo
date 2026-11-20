@@ -3,8 +3,12 @@ import { createWebHistory, createRouter } from 'vue-router';
 import { routes, handleHotUpdate } from 'vue-router/auto-routes';
 
 import './style.css';
+import { applyTheme } from './theme';
 
 import App from './App.vue';
+
+// 页面还没渲染，这时写上 CSS 变量，主按钮不会先闪成 daisyUI 默认色。
+applyTheme();
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

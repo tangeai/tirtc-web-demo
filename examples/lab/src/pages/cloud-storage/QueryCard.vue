@@ -333,11 +333,13 @@ function handleCancelExport() {
             {{ formatTime(range.startTimeMs) }} - {{ formatTime(range.endTimeMs) }}
             <span class="text-base-content/50"> · {{ formatDuration(range.startTimeMs, range.endTimeMs) }}</span>
           </span>
-          <button type="button" class="btn btn-sm ms-auto" @click="handlePlay(range)">播放</button>
+
+          <button type="button" class="btn btn-outline btn-primary btn-sm ms-auto" @click="handlePlay(range)">播放</button>
+
           <div class="tooltip tooltip-left" :data-tip="EXPORT_TIP">
             <button
               type="button"
-              class="btn btn-outline btn-primary btn-sm"
+              class="btn btn-sm"
               :disabled="session.exporting"
               @click="handleExport(range)"
             >
