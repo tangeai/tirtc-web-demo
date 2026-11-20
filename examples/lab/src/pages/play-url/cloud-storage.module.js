@@ -256,7 +256,7 @@ async function createToken({ accessKeyId, secretKeyId, deviceId, appId, endpoint
 
 // ---------- 5. 拼播放链接：只带 app_id / token / endpoint，不带 AK/SK ----------
 function buildPlayerUrl({ appId, token, endpoint }) {
-  const url = new URL('/cloud-storage', window.location.origin);
+  const url = new URL('cloud-storage', new URL(import.meta.env.BASE_URL, window.location.origin));
   url.searchParams.set('app_id', appId);
   url.searchParams.set('token', token);
   url.searchParams.set('endpoint', endpoint);

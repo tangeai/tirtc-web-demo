@@ -101,7 +101,7 @@ async function createToken({ ak, sk, uid, deviceId, ttl }) {
 
 // ---------- 5. 拼播放链接：只带 device_id / app_id / token，不带 AK/SK ----------
 function buildPlayerUrl({ deviceId, appId, token }) {
-  const url = new URL('/device-player', window.location.origin);
+  const url = new URL('device-player', new URL(import.meta.env.BASE_URL, window.location.origin));
   url.searchParams.set('device_id', deviceId);
   url.searchParams.set('app_id', appId);
   url.searchParams.set('token', token);

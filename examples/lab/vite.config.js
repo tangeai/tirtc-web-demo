@@ -8,6 +8,7 @@ import VueRouter from 'vue-router/vite';
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: process.env.VITE_BASE || '/',
   plugins: [
     VueRouter({
       // 全局设置扩展名

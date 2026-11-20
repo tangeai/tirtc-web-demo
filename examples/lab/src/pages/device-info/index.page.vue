@@ -57,12 +57,18 @@ const handleGetConnectionInfo = async () => {
 };
 
 const openPlayerPage = () => {
-  const url = `/device-player?${getNewPageParamsString(form)}`;
+  const url = new URL(
+    `device-player?${getNewPageParamsString(form)}`,
+    new URL(import.meta.env.BASE_URL, window.location.origin),
+  );
   window.open(url, 'device-player-page');
 };
 
 const openPlayerIframe = () => {
-  const url = `/device-player-iframe?${getNewPageParamsString(form)}`;
+  const url = new URL(
+    `device-player-iframe?${getNewPageParamsString(form)}`,
+    new URL(import.meta.env.BASE_URL, window.location.origin),
+  );
   window.open(url, 'device-player-iframe-page');
 };
 </script>
