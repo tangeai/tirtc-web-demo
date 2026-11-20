@@ -61,7 +61,7 @@ function handleSubmit() {
 
 function openPlayerPage() {
   if (!playerUrl.value) return;
-  window.open(playerUrl.value, 'device-player-page');
+  window.location.assign(playerUrl.value);
 }
 
 async function copyPlayerUrl() {
