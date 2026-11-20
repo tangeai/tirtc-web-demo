@@ -26,6 +26,18 @@ Object.entries(sourceDirMappings).forEach(([subDir, sourceDir]) => {
   const targetDir = path.join(distDir, subDir);
   fse.ensureDirSync(targetDir); // 确保子目录存在
   fse.copySync(sourceDir, targetDir, { overwrite: true });
+  console.log(`Copied ${path.relative(baseDir, sourceDir)} to ${path.relative(baseDir, targetDir)}`);
 });
+
+// lab 是独立 Vite 工程，仅在已有编译产物时复制
+const labDistDir = path.join(baseDir, 'examples', 'lab', 'dist');
+const labTargetDir = path.join(distDir, 'lab');
+if (fse.existsSync(labDistDir)) {
+  fse.ensureDirSync(labTargetDir);
+  fse.copySync(labDistDir, labTargetDir, { overwrite: true });
+  console.log('Copied examples/lab/dist to dist/lab');
+} else {
+  console.log('Skipped lab: examples/lab/dist not found');
+}
 
 console.log('Build completed successfully!');
