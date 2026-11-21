@@ -222,7 +222,7 @@ function handleCancelExport() {
 
       <form class="space-y-3" @submit.prevent="handleQuery">
         <dl class="space-y-1 text-sm">
-          <div class="flex gap-3">
+          <div class="flex items-center gap-3">
             <dt class="w-16 shrink-0 text-base-content/50 text-xs">App ID</dt>
             <dd
               class="min-w-0 flex-1 truncate font-mono"
@@ -232,7 +232,7 @@ function handleCancelExport() {
               {{ formatCredential(form.appId) }}
             </dd>
           </div>
-          <div class="flex gap-3">
+          <div class="flex items-center gap-3">
             <dt class="w-16 shrink-0 text-base-content/50 text-xs">Token</dt>
             <dd
               class="min-w-0 flex-1 truncate font-mono"
@@ -242,7 +242,7 @@ function handleCancelExport() {
               {{ formatCredential(form.token) }}
             </dd>
           </div>
-          <div class="flex gap-3">
+          <div class="flex items-center gap-3">
             <dt class="w-16 shrink-0 text-base-content/50 text-xs">服务地址</dt>
             <dd class="min-w-0 flex-1 truncate" :title="form.endpoint">{{ formatEndpoint(form.endpoint) }}</dd>
           </div>

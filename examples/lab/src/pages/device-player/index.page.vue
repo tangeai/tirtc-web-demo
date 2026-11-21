@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, onMounted, onUnmounted } from 'vue';
+import { reactive, ref, onMounted, onUnmounted } from 'vue';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
 import { IconLink } from '@/components/icons';
@@ -46,16 +46,15 @@ function showToast(message, type = 'info') {
 }
 
 function shortenMiddle(value, head = 4, tail = 4) {
-  const text = value.trim();
-  if (!text) return '未填写';
-  if (text.length <= head + tail + 1) return text;
-  return `${text.slice(0, head)}…${text.slice(-tail)}`;
+  if (value.length <= head + tail + 1) return value;
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
 }
 
-const credentialSummary = computed(() => {
-  const deviceId = form.deviceId.trim() || '未填写';
-  return `设备 ${deviceId} · Token ${shortenMiddle(form.token)} · App ${shortenMiddle(form.appId)}`;
-});
+function formatCredential(value) {
+  const text = value.trim();
+  if (!text) return '未填写';
+  return shortenMiddle(text, 12, 8);
+}
 
 function openEditor() {
   draft.deviceId = form.deviceId;
@@ -143,13 +142,12 @@ onUnmounted(() => {
   <AppContainer extraClass="space-y-2">
     <canvas id="canvas" class="block aspect-video w-full bg-neutral-900 rounded-lg"></canvas>
 
-    <div class="card bg-base-100 shadow-sm">
+    <div class="card card-sm bg-base-100 shadow-sm">
       <div class="card-body">
-        <!-- 凭证摘要 -->
-        <div class="mb-2 flex items-center justify-between gap-2">
-          <p class="min-w-0 text-sm break-all text-base-content/70">{{ credentialSummary }}</p>
-          <div class="flex shrink-0 items-center gap-1">
-            <button type="button" class="btn btn-ghost btn-sm" @click="openEditor">修改</button>
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="card-title text-base">控制台</h2>
+          <div class="flex items-center gap-1">
+            <button type="button" class="btn btn-ghost btn-sm" @click="openEditor">编辑</button>
             <div class="tooltip tooltip-left" data-tip="生成链接">
               <RouterLink to="/play-url/rtc" class="btn btn-ghost btn-sm btn-circle" aria-label="生成链接">
                 <IconLink class="h-4 w-4" />
@@ -157,6 +155,39 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+
+        <dl class="space-y-1 text-sm">
+          <div class="flex items-center gap-3">
+            <dt class="w-16 shrink-0 text-base-content/50 text-xs">设备 ID</dt>
+            <dd
+              class="min-w-0 flex-1 truncate"
+              :class="form.deviceId.trim() ? '' : 'text-warning'"
+              :title="form.deviceId"
+            >
+              {{ form.deviceId.trim() || '未填写' }}
+            </dd>
+          </div>
+          <div class="flex items-center gap-3">
+            <dt class="w-16 shrink-0 text-base-content/50 text-xs">Token</dt>
+            <dd
+              class="min-w-0 flex-1 truncate font-mono"
+              :class="form.token.trim() ? '' : 'text-warning'"
+              :title="form.token"
+            >
+              {{ formatCredential(form.token) }}
+            </dd>
+          </div>
+          <div class="flex items-center gap-3">
+            <dt class="w-16 shrink-0 text-base-content/50 text-xs">App ID</dt>
+            <dd
+              class="min-w-0 flex-1 truncate font-mono"
+              :class="form.appId.trim() ? '' : 'text-warning'"
+              :title="form.appId"
+            >
+              {{ formatCredential(form.appId) }}
+            </dd>
+          </div>
+        </dl>
 
         <!-- 按钮不在 form 里，不必再套一层弹层组件。showModal 已处理 Esc 和点遮罩关闭。 -->
         <dialog ref="editor" class="modal modal-bottom sm:modal-middle">
@@ -188,21 +219,23 @@ onUnmounted(() => {
           </form>
         </dialog>
 
-        <div class="flex flex-wrap gap-3">
-          <button type="button" class="btn btn-primary" :disabled="!playerReady" @click="handlePlay">播放</button>
-          <button type="button" class="btn" @click="handleStop">停止</button>
-          <button type="button" class="btn" @click="handleStartTalkback">开始对讲</button>
-          <button type="button" class="btn" @click="handleStopTalkback">停止对讲</button>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="btn btn-primary btn-sm" :disabled="!playerReady" @click="handlePlay">
+            播放
+          </button>
+          <button type="button" class="btn btn-sm" @click="handleStop">停止</button>
+          <button type="button" class="btn btn-sm" @click="handleStartTalkback">开始对讲</button>
+          <button type="button" class="btn btn-sm" @click="handleStopTalkback">停止对讲</button>
         </div>
       </div>
     </div>
 
-    <div class="card bg-base-100 shadow-sm">
+    <div class="card card-sm bg-base-100 shadow-sm">
       <div class="card-body">
-        <h2 class="card-title">命令 & 流消息</h2>
-        <div class="flex flex-wrap gap-3">
-          <button type="button" class="btn" @click="handleSendCommand">发送命令</button>
-          <button type="button" class="btn" @click="handleSendStreamMessage">发送流消息</button>
+        <h2 class="card-title text-base">命令 & 流消息</h2>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="btn btn-sm" @click="handleSendCommand">发送命令</button>
+          <button type="button" class="btn btn-sm" @click="handleSendStreamMessage">发送流消息</button>
         </div>
       </div>
     </div>
