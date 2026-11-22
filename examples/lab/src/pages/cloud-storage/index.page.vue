@@ -1,94 +1,55 @@
 <script setup>
-import { computed, reactive, ref, shallowRef, onMounted, onUnmounted } from 'vue';
+// 云存回放示例。SDK 调用都在 replay-session.js，日期工具在 date-utils.js；
+// 这里只管画面、播放控制和进度条，查询表单和录像列表在 QueryCard.vue。
+import { computed, shallowRef, onMounted, onUnmounted } from 'vue';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
-import { SPEEDS, SampleCloudStorage } from './index.module.js';
+import { ReplaySession, SPEEDS, initialReplayState } from './replay-session.js';
+import { formatTime } from './date-utils.js';
 import QueryCard from './QueryCard.vue';
 
-// 播放器回调和查询卡片共用这一份状态。表单输入留在查询卡片里。
-const session = reactive({
-  status: '',
-  days: [],
-  recordings: [],
-  queried: false,
-  speed: '1',
-  currentTime: '--:--:--',
-  // 下面三个都是录像绝对时间（毫秒），不是从 0 开始的播放进度。区间为空表示没在播。
-  rangeStartMs: 0,
-  rangeEndMs: 0,
-  currentTimeMs: 0,
-  exportStatus: '',
-  exporting: false,
-});
+const canvas = shallowRef(null);
+// 会话是类实例，不需要深层响应式
+let session = null;
+// 会话状态的副本，会话每次 change 都整体替换
+const state = shallowRef(initialReplayState);
 
-// 区间还在就可以点。播完也留着区间，进度停在终点。
-const seekable = computed(() => session.rangeEndMs > session.rangeStartMs);
+const range = computed(() => state.value.range);
+const currentTimeText = computed(() => (range.value ? formatTime(state.value.currentTimeMs) : '--:--:--'));
 
-// 当前时间在本次播放区间里的位置。区间为空时为 0。
+// 当前时间在本次播放区间里的位置，0 ~ 1。没在播时为 0
 const progress = computed(() => {
-  const span = session.rangeEndMs - session.rangeStartMs;
-  if (span <= 0) return 0;
-  return Math.min(1, Math.max(0, (session.currentTimeMs - session.rangeStartMs) / span));
+  if (!range.value) return 0;
+  const { startTimeMs, endTimeMs } = range.value;
+  const ratio = (state.value.currentTimeMs - startTimeMs) / (endTimeMs - startTimeMs);
+  return Math.min(1, Math.max(0, ratio));
 });
-
-const canvas = ref(null);
-// shallowRef：播放器是类实例，不要做成深层响应式。
-const player = shallowRef(null);
-
-function handlePause() {
-  player.value?.pause();
-}
-
-function handleResume() {
-  player.value?.resume();
-}
-
-function handleStop() {
-  player.value?.stop();
-}
 
 function handleSpeed(event) {
-  const next = player.value?.setSpeed(event.target.value);
-  session.speed = String(next ?? event.target.value);
+  session.setSpeed(Number(event.target.value));
+  // 设置失败时 state.speed 不变，下拉框要拨回去
+  event.target.value = String(state.value.speed);
 }
 
-// 点击位置换成绝对时间。seek 要求 timeMs < end，贴到末尾会被拒绝，所以最多停在结束前 1ms。
+// 点击位置换成绝对时间。seek 要求 timeMs < end，贴到末尾会被拒绝，所以最多停在结束前 1ms
 function handleSeek(event) {
-  if (!seekable.value) return;
-
-  const span = session.rangeEndMs - session.rangeStartMs;
-  if (span <= 0) return;
-
+  if (!range.value) return;
+  const { startTimeMs, endTimeMs } = range.value;
   const rect = event.currentTarget.getBoundingClientRect();
   const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-  const timeMs = Math.min(session.rangeStartMs + ratio * span, session.rangeEndMs - 1);
-  player.value?.seek(timeMs);
+  session.seek(Math.min(startTimeMs + ratio * (endTimeMs - startTimeMs), endTimeMs - 1));
 }
 
 onMounted(() => {
-  player.value = new SampleCloudStorage({
-    view: canvas.value,
-    onStatus: (text) => {
-      session.status = text;
-    },
-    onTime: ({ text, currentTimeMs, startTimeMs, endTimeMs }) => {
-      session.currentTime = text;
-      session.currentTimeMs = currentTimeMs;
-      session.rangeStartMs = startTimeMs;
-      session.rangeEndMs = endTimeMs;
-    },
-    onExportStatus: (text) => {
-      session.exportStatus = text;
-    },
-    onExporting: (active) => {
-      session.exporting = active;
-    },
+  session = new ReplaySession({ view: canvas.value });
+  session.on('change', (next) => {
+    state.value = next;
   });
 });
 
 onUnmounted(() => {
-  player.value?.dispose();
-  player.value = null;
+  session?.dispose();
+  session = null;
 });
 </script>
 
@@ -101,13 +62,13 @@ onUnmounted(() => {
 
       <div
         class="absolute inset-x-1.5 bottom-0 pt-2"
-        :class="seekable ? 'cursor-pointer' : ''"
+        :class="range ? 'cursor-pointer' : ''"
         role="slider"
         aria-label="播放进度"
-        :aria-valuemin="session.rangeStartMs"
-        :aria-valuemax="session.rangeEndMs"
-        :aria-valuenow="seekable ? session.currentTimeMs : 0"
-        :aria-disabled="!seekable"
+        :aria-valuemin="range?.startTimeMs ?? 0"
+        :aria-valuemax="range?.endTimeMs ?? 0"
+        :aria-valuenow="range ? state.currentTimeMs : 0"
+        :aria-disabled="!range"
         @click="handleSeek"
       >
         <div class="h-1 overflow-hidden rounded-full bg-white/40">
@@ -119,26 +80,33 @@ onUnmounted(() => {
     <div class="card card-sm bg-base-100 shadow-sm">
       <div class="card-body">
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" class="btn btn-sm" @click="handlePause">暂停</button>
-          <button type="button" class="btn btn-sm" @click="handleResume">继续</button>
-          <button type="button" class="btn btn-sm" @click="handleStop">停止</button>
+          <button type="button" class="btn btn-sm" :disabled="!range" @click="session.pause()">暂停</button>
+          <button type="button" class="btn btn-sm" :disabled="!range" @click="session.resume()">继续</button>
+          <button type="button" class="btn btn-sm" :disabled="!range" @click="session.stop()">停止</button>
 
           <!-- 倍速 -->
-          <select class="select select-sm w-auto" :value="session.speed" @change="handleSpeed">
+          <select class="select select-sm w-auto" :value="String(state.speed)" @change="handleSpeed">
             <option v-for="item in SPEEDS" :key="item" :value="String(item)">{{ item }}×</option>
           </select>
           <span
-            v-if="session.speed !== '1'"
+            v-if="state.speed !== 1"
             class="tooltip tooltip-top text-xs text-base-content/50"
             data-tip="非 1 倍速时静音"
             >静音</span
           >
 
-          <span class="ms-auto text-sm text-base-content/70">{{ session.currentTime }}</span>
+          <span class="ms-auto text-sm text-base-content/70">{{ currentTimeText }}</span>
         </div>
       </div>
     </div>
 
-    <QueryCard :player="player" :session="session" />
+    <QueryCard
+      :state="state"
+      @query="(params) => session.query(params)"
+      @select-date="(date) => session.selectDate(date)"
+      @play="(recording) => session.play(recording)"
+      @export="(recording) => session.exportRange(recording)"
+      @cancel-export="() => session.cancelExport()"
+    />
   </AppContainer>
 </template>

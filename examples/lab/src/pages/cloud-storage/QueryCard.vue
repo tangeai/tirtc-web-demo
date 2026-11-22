@@ -1,16 +1,13 @@
 <script setup lang="jsx">
+// 查询表单和录像列表。只读 state，所有操作都 emit 给父页面，由父页面交给会话处理。
 import { computed, reactive, ref, Teleport } from 'vue';
 import dayjs from 'dayjs';
 import { NDatePicker } from 'naive-ui';
 import { IconLink } from '@/components/icons';
-import {
-  EXPORT_TIP,
-  dateRangeError,
-  formatDuration,
-  formatTime,
-  readUrlParams,
-  recentDayTimestamps,
-} from './index.module.js';
+import { EXPORT_MAX_MS } from './replay-session.js';
+import { formatDuration, formatTime, recentDays, recentDayTimestamps } from './date-utils.js';
+
+const EXPORT_TIP = `下载该段前 ${EXPORT_MAX_MS / 1000} 秒`;
 
 // 不用 showModal，浏览器不会处理 Esc。关闭函数记在这里，弹层卸掉时一起卸掉监听。
 let escapeBinding = null;
@@ -83,20 +80,22 @@ EditorDialog.props = {
 };
 
 const props = defineProps({
-  player: { type: Object, default: null },
-  session: { type: Object, required: true },
+  state: { type: Object, required: true },
 });
 
-const params = readUrlParams();
+const emit = defineEmits(['query', 'select-date', 'play', 'export', 'cancel-export']);
+
+// URL 可以预填凭证，例如 ?app_id=...&token=...&endpoint=...
+const search = new URLSearchParams(window.location.search);
 const form = reactive({
-  appId: params.appId,
-  token: params.token,
-  endpoint: params.endpoint,
+  appId: search.get('app_id') || '',
+  token: search.get('token') || '',
+  endpoint: search.get('endpoint') || '',
 });
-// 查询范围和当前选中的某一天分开。改范围不会自动查询，点「查询」才查。
+// 默认查最近 7 天。改范围不会自动查询，点「查询」才查。
 // format 用 yyyy-MM-dd，这是 Naive UI（date-fns）的写法，不是 dayjs 的 YYYY-MM-DD。
-const dateRange = ref([params.startDate, params.endDate]);
-const selectedDate = ref('');
+const { startDate, endDate } = recentDays(7);
+const dateRange = ref([startDate, endDate]);
 // 卡片上只留一行概览。弹层里改的是草稿，确定才写回 form，取消丢弃。
 const editorOpen = ref(false);
 const draft = reactive({ appId: '', token: '', endpoint: '' });
@@ -125,7 +124,7 @@ function confirmEditor() {
   editorOpen.value = false;
 }
 
-const recordingDays = computed(() => props.session.days.filter((day) => day.hasRecording));
+const recordingDays = computed(() => props.state.days.filter((day) => day.hasRecording));
 
 function shortenMiddle(value, head = 4, tail = 4) {
   if (value.length <= head + tail + 1) return value;
@@ -149,59 +148,13 @@ function isFutureDate(timestamp) {
   return dayjs(timestamp).startOf('day').isAfter(dayjs().startOf('day'));
 }
 
-function applyResult(result) {
-  props.session.days = result.days;
-  props.session.recordings = result.recordings;
-  selectedDate.value = result.selectedDate || '';
-}
-
-async function handleQuery() {
+// 参数校验和出错提示在会话里，缺凭证时这里顺手打开编辑弹层
+function handleQuery() {
   const [startDate, endDate] = dateRange.value || [];
-  const rangeError = dateRangeError(startDate, endDate);
-  if (rangeError) {
-    props.session.status = rangeError;
-    return;
-  }
-  if (!form.appId.trim()) {
-    openEditor();
-    props.session.status = '请填写 App ID';
-    return;
-  }
-  if (!form.token.trim()) {
-    openEditor();
-    props.session.status = '请填写 Token';
-    return;
-  }
-  if (!props.player) return;
-
-  const result = await props.player.query({
-    appId: form.appId.trim(),
-    token: form.token.trim(),
-    endpoint: form.endpoint.trim(),
-    startDate,
-    endDate,
-    speed: Number(props.session.speed),
-  });
-  if (result.ready) props.session.queried = true;
-  applyResult(result);
-}
-
-// 点某一天只重查这一天，不重新 init
-async function loadDate(date) {
-  if (!props.session.queried || !date || !props.player) return;
-  applyResult(await props.player.selectDate(date));
-}
-
-function handlePlay(range) {
-  props.player?.play(range);
-}
-
-function handleExport(range) {
-  props.player?.exportRange(range);
-}
-
-function handleCancelExport() {
-  props.player?.cancelExport();
+  const appId = form.appId.trim();
+  const token = form.token.trim();
+  if (!appId || !token) openEditor();
+  emit('query', { appId, token, endpoint: form.endpoint.trim(), startDate, endDate });
 }
 </script>
 
@@ -293,39 +246,40 @@ function handleCancelExport() {
         </div>
 
         <!-- 播放、跳转也会改这条状态 -->
-        <p v-if="session.status" class="text-xs text-base-content/60" role="status">{{ session.status }}</p>
+        <p v-if="state.status" class="text-xs text-base-content/60" role="status">{{ state.status }}</p>
       </form>
 
+      <!-- 点某一天只重查这一天，不重新初始化 -->
       <div v-if="recordingDays.length" class="mt-4 flex flex-wrap gap-2">
         <button
           v-for="day in recordingDays"
           :key="day.date"
           type="button"
           class="btn btn-sm"
-          :class="day.date === selectedDate ? 'btn-primary' : 'btn-outline'"
+          :class="day.date === state.selectedDate ? 'btn-primary' : 'btn-outline'"
           :title="day.date"
-          @click="loadDate(day.date)"
+          @click="emit('select-date', day.date)"
         >
           {{ day.date.slice(5) }}
         </button>
       </div>
 
       <!-- 空着不渲染。用法写在导出按钮上，这里只留进行中、完成和失败。 -->
-      <div v-if="session.exporting || session.exportStatus" class="mt-4 flex flex-wrap items-center gap-2">
+      <div v-if="state.exporting || state.exportStatus" class="mt-4 flex flex-wrap items-center gap-2">
         <button
-          v-if="session.exporting"
+          v-if="state.exporting"
           type="button"
           class="btn btn-outline btn-error btn-sm"
-          @click="handleCancelExport"
+          @click="emit('cancel-export')"
         >
           取消导出
         </button>
-        <span class="text-sm text-base-content/70">{{ session.exportStatus }}</span>
+        <span class="text-sm text-base-content/70">{{ state.exportStatus }}</span>
       </div>
 
-      <div v-if="session.recordings.length" class="mt-3 rounded-lg border border-base-300">
+      <div v-if="state.recordings.length" class="mt-3 rounded-lg border border-base-300">
         <div
-          v-for="range in session.recordings"
+          v-for="range in state.recordings"
           :key="range.startTimeMs"
           class="flex items-center gap-2 border-b border-base-300 px-3 py-2 last:border-b-0"
         >
@@ -334,15 +288,12 @@ function handleCancelExport() {
             <span class="text-base-content/50"> · {{ formatDuration(range.startTimeMs, range.endTimeMs) }}</span>
           </span>
 
-          <button type="button" class="btn btn-outline btn-primary btn-sm ms-auto" @click="handlePlay(range)">播放</button>
+          <button type="button" class="btn btn-outline btn-primary btn-sm ms-auto" @click="emit('play', range)">
+            播放
+          </button>
 
           <div class="tooltip tooltip-left" :data-tip="EXPORT_TIP">
-            <button
-              type="button"
-              class="btn btn-sm"
-              :disabled="session.exporting"
-              @click="handleExport(range)"
-            >
+            <button type="button" class="btn btn-sm" :disabled="state.exporting" @click="emit('export', range)">
               导出
             </button>
           </div>
