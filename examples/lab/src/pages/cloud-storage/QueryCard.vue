@@ -1,11 +1,11 @@
 <script setup lang="jsx">
-// 查询表单和录像列表。只读 state，所有操作都 emit 给父页面，由父页面交给会话处理。
+// 查询表单和录像列表。只读 query 和 exportState，所有操作都 emit 给父页面。
 import { computed, reactive, ref, Teleport } from 'vue';
 import dayjs from 'dayjs';
 import { NDatePicker } from 'naive-ui';
 import { IconLink } from '@/components/icons';
-import { EXPORT_MAX_MS } from './replay-session.js';
-import { formatDuration, formatTime, recentDays, recentDayTimestamps } from './date-utils.js';
+import { EXPORT_MAX_MS } from './replay';
+import { formatDuration, formatTime, recentDays, recentDayTimestamps } from './replay/date-utils.js';
 
 const EXPORT_TIP = `下载该段前 ${EXPORT_MAX_MS / 1000} 秒`;
 
@@ -80,7 +80,8 @@ EditorDialog.props = {
 };
 
 const props = defineProps({
-  state: { type: Object, required: true },
+  query: { type: Object, required: true },
+  exportState: { type: Object, required: true },
 });
 
 const emit = defineEmits(['query', 'select-date', 'play', 'export', 'cancel-export']);
@@ -124,7 +125,7 @@ function confirmEditor() {
   editorOpen.value = false;
 }
 
-const recordingDays = computed(() => props.state.days.filter((day) => day.hasRecording));
+const recordingDays = computed(() => props.query.days.filter((day) => day.hasRecording));
 
 function shortenMiddle(value, head = 4, tail = 4) {
   if (value.length <= head + tail + 1) return value;
@@ -245,8 +246,7 @@ function handleQuery() {
           </div>
         </div>
 
-        <!-- 播放、跳转也会改这条状态 -->
-        <p v-if="state.status" class="text-xs text-base-content/60" role="status">{{ state.status }}</p>
+        <p v-if="query.status" class="text-xs text-base-content/60" role="status">{{ query.status }}</p>
       </form>
 
       <!-- 点某一天只重查这一天，不重新初始化 -->
@@ -256,7 +256,7 @@ function handleQuery() {
           :key="day.date"
           type="button"
           class="btn btn-sm"
-          :class="day.date === state.selectedDate ? 'btn-primary' : 'btn-outline'"
+          :class="day.date === query.selectedDate ? 'btn-primary' : 'btn-outline'"
           :title="day.date"
           @click="emit('select-date', day.date)"
         >
@@ -265,21 +265,21 @@ function handleQuery() {
       </div>
 
       <!-- 空着不渲染。用法写在导出按钮上，这里只留进行中、完成和失败。 -->
-      <div v-if="state.exporting || state.exportStatus" class="mt-4 flex flex-wrap items-center gap-2">
+      <div v-if="exportState.exporting || exportState.status" class="mt-4 flex flex-wrap items-center gap-2">
         <button
-          v-if="state.exporting"
+          v-if="exportState.exporting"
           type="button"
           class="btn btn-outline btn-error btn-sm"
           @click="emit('cancel-export')"
         >
           取消导出
         </button>
-        <span class="text-sm text-base-content/70">{{ state.exportStatus }}</span>
+        <span class="text-sm text-base-content/70">{{ exportState.status }}</span>
       </div>
 
-      <div v-if="state.recordings.length" class="mt-3 rounded-lg border border-base-300">
+      <div v-if="query.recordings.length" class="mt-3 rounded-lg border border-base-300">
         <div
-          v-for="range in state.recordings"
+          v-for="range in query.recordings"
           :key="range.startTimeMs"
           class="flex items-center gap-2 border-b border-base-300 px-3 py-2 last:border-b-0"
         >
@@ -293,7 +293,7 @@ function handleQuery() {
           </button>
 
           <div class="tooltip tooltip-left" :data-tip="EXPORT_TIP">
-            <button type="button" class="btn btn-sm" :disabled="state.exporting" @click="emit('export', range)">
+            <button type="button" class="btn btn-sm" :disabled="exportState.exporting" @click="emit('export', range)">
               导出
             </button>
           </div>

@@ -1,34 +1,49 @@
 <script setup>
-// 云存回放示例。SDK 调用都在 replay-session.js，日期工具在 date-utils.js；
-// 这里只管画面、播放控制和进度条，查询表单和录像列表在 QueryCard.vue。
+// 云存回放示例。回放逻辑和日期工具都在 replay/。
+// 这里把客户端、查询、播放和导出串起来，并管画面、播放控制和进度条。
+// 查询表单和录像列表在 QueryCard.vue。
 import { computed, shallowRef, onMounted, onUnmounted } from 'vue';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
-import { ReplaySession, SPEEDS, initialReplayState } from './replay-session.js';
-import { formatTime } from './date-utils.js';
+import {
+  CloudClient,
+  Query,
+  ReplayPlayer,
+  Exporter,
+  SPEEDS,
+  initialQueryState,
+  initialPlayerState,
+  initialExportState,
+} from './replay';
+import { formatTime } from './replay/date-utils.js';
 import QueryCard from './QueryCard.vue';
 
 const canvas = shallowRef(null);
-// 会话是类实例，不需要深层响应式
-let session = null;
-// 会话状态的副本，会话每次 change 都整体替换
-const state = shallowRef(initialReplayState);
+// 类实例，不需要深层响应式
+let client = null;
+let query = null;
+let player = null;
+let exporter = null;
+// 各自状态的副本，每次 change 都整体替换
+const queryState = shallowRef(initialQueryState);
+const playerState = shallowRef(initialPlayerState);
+const exportState = shallowRef(initialExportState);
 
-const range = computed(() => state.value.range);
-const currentTimeText = computed(() => (range.value ? formatTime(state.value.currentTimeMs) : '--:--:--'));
+const range = computed(() => playerState.value.range);
+const currentTimeText = computed(() => (range.value ? formatTime(playerState.value.currentTimeMs) : '--:--:--'));
 
 // 当前时间在本次播放区间里的位置，0 ~ 1。没在播时为 0
 const progress = computed(() => {
   if (!range.value) return 0;
   const { startTimeMs, endTimeMs } = range.value;
-  const ratio = (state.value.currentTimeMs - startTimeMs) / (endTimeMs - startTimeMs);
+  const ratio = (playerState.value.currentTimeMs - startTimeMs) / (endTimeMs - startTimeMs);
   return Math.min(1, Math.max(0, ratio));
 });
 
 function handleSpeed(event) {
-  session.setSpeed(Number(event.target.value));
-  // 设置失败时 state.speed 不变，下拉框要拨回去
-  event.target.value = String(state.value.speed);
+  player.setSpeed(Number(event.target.value));
+  // 设置失败时 speed 不变，下拉框要拨回去
+  event.target.value = String(playerState.value.speed);
 }
 
 // 点击位置换成绝对时间。seek 要求 timeMs < end，贴到末尾会被拒绝，所以最多停在结束前 1ms
@@ -37,19 +52,53 @@ function handleSeek(event) {
   const { startTimeMs, endTimeMs } = range.value;
   const rect = event.currentTarget.getBoundingClientRect();
   const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-  session.seek(Math.min(startTimeMs + ratio * (endTimeMs - startTimeMs), endTimeMs - 1));
+  player.seek(Math.min(startTimeMs + ratio * (endTimeMs - startTimeMs), endTimeMs - 1));
+}
+
+// 查询和切日期都会停掉当前回放。输入不合法时 query 返回 false，播放继续。
+// 播放和导出用的是客户端建好的 storage
+function handleQuery(params) {
+  if (query.query(params)) player.stop();
+}
+
+function handleSelectDate(date) {
+  player.stop();
+  query.selectDate(date);
+}
+
+function handlePlay(recording) {
+  player.play(client.storage, recording);
+}
+
+function handleExport(recording) {
+  exporter.start(client.storage, recording);
 }
 
 onMounted(() => {
-  session = new ReplaySession({ view: canvas.value });
-  session.on('change', (next) => {
-    state.value = next;
+  client = new CloudClient();
+  query = new Query(client);
+  player = new ReplayPlayer({ view: canvas.value });
+  exporter = new Exporter();
+  query.on('change', (next) => {
+    queryState.value = next;
+  });
+  player.on('change', (next) => {
+    playerState.value = next;
+  });
+  exporter.on('change', (next) => {
+    exportState.value = next;
   });
 });
 
 onUnmounted(() => {
-  session?.dispose();
-  session = null;
+  exporter?.dispose();
+  player?.dispose();
+  query?.dispose();
+  client?.dispose();
+  exporter = null;
+  player = null;
+  query = null;
+  client = null;
 });
 </script>
 
@@ -67,7 +116,7 @@ onUnmounted(() => {
         aria-label="播放进度"
         :aria-valuemin="range?.startTimeMs ?? 0"
         :aria-valuemax="range?.endTimeMs ?? 0"
-        :aria-valuenow="range ? state.currentTimeMs : 0"
+        :aria-valuenow="range ? playerState.currentTimeMs : 0"
         :aria-disabled="!range"
         @click="handleSeek"
       >
@@ -80,16 +129,16 @@ onUnmounted(() => {
     <div class="card card-sm bg-base-100 shadow-sm">
       <div class="card-body">
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" class="btn btn-sm" :disabled="!range" @click="session.pause()">暂停</button>
-          <button type="button" class="btn btn-sm" :disabled="!range" @click="session.resume()">继续</button>
-          <button type="button" class="btn btn-sm" :disabled="!range" @click="session.stop()">停止</button>
+          <button type="button" class="btn btn-sm" :disabled="!range" @click="player.pause()">暂停</button>
+          <button type="button" class="btn btn-sm" :disabled="!range" @click="player.resume()">继续</button>
+          <button type="button" class="btn btn-sm" :disabled="!range" @click="player.stop()">停止</button>
 
           <!-- 倍速 -->
-          <select class="select select-sm w-auto" :value="String(state.speed)" @change="handleSpeed">
+          <select class="select select-sm w-auto" :value="String(playerState.speed)" @change="handleSpeed">
             <option v-for="item in SPEEDS" :key="item" :value="String(item)">{{ item }}×</option>
           </select>
           <span
-            v-if="state.speed !== 1"
+            v-if="playerState.speed !== 1"
             class="tooltip tooltip-top text-xs text-base-content/50"
             data-tip="非 1 倍速时静音"
             >静音</span
@@ -97,16 +146,19 @@ onUnmounted(() => {
 
           <span class="ms-auto text-sm text-base-content/70">{{ currentTimeText }}</span>
         </div>
+
+        <p v-if="playerState.status" class="text-xs text-base-content/60" role="status">{{ playerState.status }}</p>
       </div>
     </div>
 
     <QueryCard
-      :state="state"
-      @query="(params) => session.query(params)"
-      @select-date="(date) => session.selectDate(date)"
-      @play="(recording) => session.play(recording)"
-      @export="(recording) => session.exportRange(recording)"
-      @cancel-export="() => session.cancelExport()"
+      :query="queryState"
+      :export-state="exportState"
+      @query="handleQuery"
+      @select-date="handleSelectDate"
+      @play="handlePlay"
+      @export="handleExport"
+      @cancel-export="() => exporter.cancel()"
     />
   </AppContainer>
 </template>
