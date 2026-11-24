@@ -7,7 +7,7 @@ import AppHeader from '../../components/AppHeader.vue';
 import { IconLink } from '@/components/icons';
 import { TiRtc, TiRtcInitOptions } from '@/libs/tirtc';
 import { LiveSession, Phase } from './live-session.js';
-import { STREAMS, MIC_SAMPLE_RATE, COMMAND, textOf, hex, requestDeviceStatus, sendHelloMessage } from './protocol.js';
+import { STREAMS, AUDIO_INPUT_SAMPLE_RATE, COMMAND, textOf, hex, requestDeviceStatus, sendHelloMessage } from './protocol.js';
 
 const form = reactive({
   deviceId: '',
@@ -178,7 +178,7 @@ onMounted(async () => {
   session = new LiveSession({
     view: canvas.value,
     streams: STREAMS,
-    micOptions: { sampleRate: MIC_SAMPLE_RATE },
+    audioInputOptions: { sampleRate: AUDIO_INPUT_SAMPLE_RATE },
   });
   session.on('change', (state) => {
     live.value = state;

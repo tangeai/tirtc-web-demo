@@ -1,13 +1,13 @@
 // 和设备侧约定的流号、命令号。这些值由设备固件决定，不是随便填的，换设备前先和设备侧确认。
 
 export const STREAMS = {
-  audio: 10, // 设备 → 浏览器：音频
-  video: 11, // 设备 → 浏览器：视频
-  mic: 14, // 浏览器 → 设备：对讲音频
+  audio: 10, // 设备 → 浏览器，交给 TiRtcAudioOutput
+  video: 11, // 设备 → 浏览器，交给 TiRtcVideoOutput
+  audioInput: 14, // 浏览器 → 设备，交给 TiRtcAudioInput（对讲）
 };
 
-// 对讲音频采样率，要和设备支持的一致
-export const MIC_SAMPLE_RATE = 8000;
+// 对讲采集采样率，要和设备支持的一致，传给 audioInput.setOptions
+export const AUDIO_INPUT_SAMPLE_RATE = 8000;
 
 // 流消息走的流号
 export const MESSAGE_STREAM_ID = 3;

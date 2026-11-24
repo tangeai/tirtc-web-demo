@@ -3,10 +3,18 @@ import Emitter from '@/utils/emitter.js';
 
 // 一次实时直播会话：连接设备、播放音视频、对讲、收发命令。
 //
+// 一条连接上挂三个 SDK 对象：videoOutput、audioOutput、audioInput。
+// 对讲没有单独的 SDK 类型，就是操作这次会话的 audioInput（TiRtcAudioInput）。
+//
 // 用法：
-//   const session = new LiveSession({ view: canvas, streams: { audio, video, mic } });
+//   const session = new LiveSession({
+//     view: canvas,
+//     streams: { audio, video, audioInput },
+//     audioInputOptions: { sampleRate: 8000 },
+//   });
 //   session.on('change', (state) => ...);  // 状态变了就通知，页面据此刷新按钮和提示
 //   await session.start({ deviceId, token });
+//   await session.startTalkback();
 //   session.stop();
 //
 // 会话只做事和维护状态，不弹提示。方法失败时 reject 一个 Error，由页面决定怎么展示。
@@ -34,22 +42,27 @@ export class LiveSession extends Emitter {
 
   // 每次 start / stop 都加一。异步操作回来时编号变了，说明期间已经停止或重新开始，结果作废
   #seq = 0;
-  // 本次会话的 SDK 对象，只在 #teardown() 里释放
-  #res = null;
+  // 本次 start() 创建的 SDK 对象，只在 #teardown() 里释放
+  #connection = null;
+  #videoOutput = null; // 设备 → 浏览器：画面
+  #audioOutput = null; // 设备 → 浏览器：声音
+  #audioInput = null; // 浏览器 → 设备：对讲
+  // 本次挂上的连接状态监听，只为 teardown 时 off 掉同一个函数
+  #onConnectionState = null;
 
   // view：渲染画面的 canvas 元素
-  // streams：{ audio, video, mic } 三路流号
-  // micOptions：对讲音频参数，例如 { sampleRate: 8000 }
-  constructor({ view, streams, micOptions = {} }) {
+  // streams：{ audio, video, audioInput } 三路流号
+  // audioInputOptions：对讲采集参数，传给 audioInput.setOptions，例如 { sampleRate: 8000 }
+  constructor({ view, streams, audioInputOptions = {} }) {
     super();
     this.view = view;
     this.streams = streams;
-    this.micOptions = micOptions;
+    this.audioInputOptions = audioInputOptions;
   }
 
   // 用来发命令和流消息；没在播放时为 null
   get connection() {
-    return this.state.phase === Phase.PLAYING ? this.#res.connection : null;
+    return this.state.phase === Phase.PLAYING ? this.#connection : null;
   }
 
   async start({ deviceId, token }) {
@@ -60,18 +73,20 @@ export class LiveSession extends Emitter {
     const seq = ++this.#seq;
     const { streams } = this;
 
-    // 一条连接上挂视频、音频和对讲，三者都通过 connection 收发数据
+    // 一条连接上挂三个 SDK 对象，都通过 connection 收发数据
     const connection = TiRtcConn();
-    const res = {
-      connection,
-      video: TiRtcVideoOutput({ connection, streamId: streams.video, view: this.view }),
-      audio: TiRtcAudioOutput({ connection, streamId: streams.audio }),
-      mic: TiRtcAudioInput({ connection, streamId: streams.mic }),
-      onConnectionStateChange: ({ state }) => this.#onConnectionStateChange(seq, state),
-    };
-    // 对讲参数必须在 mic.start() 之前设置，录音中改会抛错
-    res.mic.setOptions(this.micOptions);
-    this.#res = res;
+    const videoOutput = TiRtcVideoOutput({ connection, streamId: streams.video, view: this.view });
+    const audioOutput = TiRtcAudioOutput({ connection, streamId: streams.audio });
+    const audioInput = TiRtcAudioInput({ connection, streamId: streams.audioInput });
+    const onConnectionState = ({ state }) => this.#onConnectionStateChange(seq, state);
+    // 对讲参数必须在 audioInput.start() 之前设置，录音中改会抛错
+    audioInput.setOptions(this.audioInputOptions);
+
+    this.#connection = connection;
+    this.#videoOutput = videoOutput;
+    this.#audioOutput = audioOutput;
+    this.#audioInput = audioInput;
+    this.#onConnectionState = onConnectionState;
     this.#setState({ phase: Phase.CONNECTING, talking: false, error: null });
 
     try {
@@ -88,8 +103,8 @@ export class LiveSession extends Emitter {
     if (seq !== this.#seq) return;
 
     // attach：本地开始解码、出声、画画面
-    res.video.attach();
-    res.audio.attach();
+    videoOutput.attach();
+    audioOutput.attach();
     // subscribe：向设备要流。requestKeyFrame 让设备马上发关键帧，第一帧画面出得更快
     connection.subscribeVideo({ streamId: streams.video });
     connection.subscribeAudio({ streamId: streams.audio });
@@ -98,7 +113,7 @@ export class LiveSession extends Emitter {
     // onCommand / onStreamMessage 是赋值，再赋一次会覆盖，所以连上后只挂这一次
     connection.onCommand = (message) => this.emit('command', message);
     connection.onStreamMessage = (message) => this.emit('streamMessage', message);
-    connection.on('connectionStateChange', res.onConnectionStateChange);
+    connection.on('connectionStateChange', onConnectionState);
 
     this.#setState({ phase: Phase.PLAYING });
   }
@@ -109,21 +124,21 @@ export class LiveSession extends Emitter {
     this.#setState({ phase: Phase.IDLE, talking: false, error: null });
   }
 
-  // 开始对讲：申请麦克风 → 开始采集 → attach 后才真正发给设备
+  // 对讲就是操作 audioInput：申请麦克风 → 开始采集 → attach 后才真正发给设备
   async startTalkback() {
     if (this.state.phase !== Phase.PLAYING || this.state.talking) return;
 
     const seq = this.#seq;
-    const { mic } = this.#res;
+    const audioInput = this.#audioInput;
     this.#setState({ talking: true });
     try {
-      await mic.start();
+      await audioInput.start();
       // 等麦克风授权期间已经停止了播放或对讲，刚打开的麦克风要关掉
       if (seq !== this.#seq || !this.state.talking) {
-        mic.stop();
+        audioInput.stop();
         return;
       }
-      await mic.attach();
+      await audioInput.attach();
     } catch (reason) {
       if (seq === this.#seq) this.#setState({ talking: false });
       throw toError(reason);
@@ -133,10 +148,10 @@ export class LiveSession extends Emitter {
   async stopTalkback() {
     if (!this.state.talking) return;
 
-    const { mic } = this.#res;
+    const audioInput = this.#audioInput;
     this.#setState({ talking: false });
-    await mic.detach();
-    await mic.stop();
+    await audioInput.detach();
+    await audioInput.stop();
   }
 
   // 页面卸载时调用。之后这个会话不能再用
@@ -154,20 +169,29 @@ export class LiveSession extends Emitter {
 
   // 释放顺序：先停对讲，再停本地播放，最后断开连接。disconnect 不会自动做前两步
   #teardown() {
-    const res = this.#res;
-    if (!res) return;
-    this.#res = null;
+    const connection = this.#connection;
+    if (!connection) return;
 
-    res.connection.off('connectionStateChange', res.onConnectionStateChange);
+    const videoOutput = this.#videoOutput;
+    const audioOutput = this.#audioOutput;
+    const audioInput = this.#audioInput;
+    const onConnectionState = this.#onConnectionState;
+    this.#connection = null;
+    this.#videoOutput = null;
+    this.#audioOutput = null;
+    this.#audioInput = null;
+    this.#onConnectionState = null;
+
+    connection.off('connectionStateChange', onConnectionState);
     // SDK 收到消息时直接调用，不能置成 null
-    res.connection.onCommand = () => {};
-    res.connection.onStreamMessage = () => {};
+    connection.onCommand = () => {};
+    connection.onStreamMessage = () => {};
 
-    res.mic.detach();
-    res.mic.stop();
-    res.video.detach();
-    res.audio.detach();
-    res.connection.disconnect();
+    audioInput.detach();
+    audioInput.stop();
+    videoOutput.detach();
+    audioOutput.detach();
+    connection.disconnect();
   }
 
   #setState(patch) {
