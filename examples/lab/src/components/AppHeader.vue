@@ -9,8 +9,8 @@ defineProps({
 const route = useRoute();
 
 const links = [
-  { to: '/device-player', label: '实时直播', exact: true },
-  { to: '/cloud-storage', label: '云存回放' },
+  { to: '/live', label: '实时直播', exact: true },
+  { to: '/cloud-replay', label: '云存回放' },
 ];
 
 function isActive(link) {
@@ -26,7 +26,7 @@ function closeMenu(event) {
 <template>
   <div class="h-12 min-h-12 navbar bg-base-100 shadow-sm">
     <div class="navbar-start">
-      <RouterLink to="/device-player" aria-current-value="false" class="btn btn-ghost text-lg">TiRTC</RouterLink>
+      <RouterLink to="/live" aria-current-value="false" class="btn btn-ghost text-lg">TiRTC</RouterLink>
     </div>
 
     <div v-if="title" class="navbar-center">

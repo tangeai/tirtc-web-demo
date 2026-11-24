@@ -7,7 +7,7 @@ const router = useRouter();
 
 // 首页就是实时播放页。原来的查询参数原样带过去。
 onMounted(() => {
-  router.replace({ path: '/device-player', query: route.query, hash: route.hash });
+  router.replace({ path: '/live', query: route.query, hash: route.hash });
 });
 </script>
 

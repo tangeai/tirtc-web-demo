@@ -74,7 +74,7 @@ function openPlayerPage() {
 
   // window.location.assign(playerUrl.value);
   router.push({
-    path: '/cloud-storage',
+    path: '/cloud-replay',
     query: Object.fromEntries(new URL(playerUrl.value).searchParams),
   });
 }

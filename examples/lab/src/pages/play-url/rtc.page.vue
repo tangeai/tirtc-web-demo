@@ -66,7 +66,7 @@ function openPlayerPage() {
 
   // window.location.assign(playerUrl.value);
   router.push({
-    path: '/device-player',
+    path: '/live',
     query: Object.fromEntries(new URL(playerUrl.value).searchParams),
   });
 }
