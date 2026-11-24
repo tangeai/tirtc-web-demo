@@ -38,6 +38,9 @@ export const naiveThemeOverrides = {
     primaryColorPressed: mix(primary, '#000000', 0.15),
     primaryColorSuppl: primary,
   },
+  Message: {
+    borderRadius: '8px',
+  },
 };
 
 /** 把 hex 往另一个颜色上靠。amount 为 0 保持原色，为 1 变成目标色。 */

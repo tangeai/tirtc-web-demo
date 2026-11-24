@@ -2,6 +2,7 @@
 // 实时直播示例。SDK 调用都在 live-session.js，和设备约定的流号、命令在 protocol.js，
 // 这里只管表单、按钮状态和提示文案。
 import { computed, reactive, ref, shallowRef, onMounted, onUnmounted } from 'vue';
+import { useMessage } from 'naive-ui';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
 import { IconLink } from '@/components/icons';
@@ -39,30 +40,12 @@ const draft = reactive({
   token: '',
   appId: '',
 });
-const toast = reactive({
-  show: false,
-  message: '',
-  type: 'info',
-});
-
-const toastClassByType = {
-  error: 'alert-error',
-  success: 'alert-success',
-  info: 'alert-info',
-};
+const message = useMessage();
 
 let session = null;
-let toastTimer = null;
 
-function showToast(message, type = 'info') {
-  toast.message = message;
-  toast.type = toastClassByType[type] || toastClassByType.info;
-  toast.show = true;
-
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.show = false;
-  }, 4000);
+function showToast(content, type = 'info') {
+  (message[type] || message.info)(content);
 }
 
 function shortenMiddle(value, head = 4, tail = 4) {
@@ -196,7 +179,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  clearTimeout(toastTimer);
   session?.dispose();
   session = null;
 });
@@ -317,12 +299,6 @@ onUnmounted(() => {
             发送流消息
           </button>
         </div>
-      </div>
-    </div>
-
-    <div class="toast toast-top toast-end z-50">
-      <div v-if="toast.show" class="alert" :class="toast.type">
-        <span>{{ toast.message }}</span>
       </div>
     </div>
   </AppContainer>
