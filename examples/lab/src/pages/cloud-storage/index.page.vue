@@ -1,94 +1,104 @@
 <script setup>
-import { computed, reactive, ref, shallowRef, onMounted, onUnmounted } from 'vue';
+// 云存回放示例。回放逻辑和日期工具都在 replay/。
+// 这里把客户端、查询、播放和导出串起来，并管画面、播放控制和进度条。
+// 查询表单和录像列表在 QueryCard.vue。
+import { computed, shallowRef, onMounted, onUnmounted } from 'vue';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
-import { SPEEDS, SampleCloudStorage } from './index.module.js';
+import {
+  CloudClient,
+  Query,
+  ReplayPlayer,
+  Exporter,
+  SPEEDS,
+  initialQueryState,
+  initialPlayerState,
+  initialExportState,
+} from './replay';
+import { formatTime } from './replay/date-utils.js';
 import QueryCard from './QueryCard.vue';
 
-// 播放器回调和查询卡片共用这一份状态。表单输入留在查询卡片里。
-const session = reactive({
-  status: '',
-  days: [],
-  recordings: [],
-  queried: false,
-  speed: '1',
-  currentTime: '--:--:--',
-  // 下面三个都是录像绝对时间（毫秒），不是从 0 开始的播放进度。区间为空表示没在播。
-  rangeStartMs: 0,
-  rangeEndMs: 0,
-  currentTimeMs: 0,
-  exportStatus: '',
-  exporting: false,
-});
+const canvas = shallowRef(null);
+// 类实例，不需要深层响应式
+let client = null;
+let query = null;
+let player = null;
+let exporter = null;
+// 各自状态的副本，每次 change 都整体替换
+const queryState = shallowRef(initialQueryState);
+const playerState = shallowRef(initialPlayerState);
+const exportState = shallowRef(initialExportState);
 
-// 区间还在就可以点。播完也留着区间，进度停在终点。
-const seekable = computed(() => session.rangeEndMs > session.rangeStartMs);
+const range = computed(() => playerState.value.range);
+const currentTimeText = computed(() => (range.value ? formatTime(playerState.value.currentTimeMs) : '--:--:--'));
 
-// 当前时间在本次播放区间里的位置。区间为空时为 0。
+// 当前时间在本次播放区间里的位置，0 ~ 1。没在播时为 0
 const progress = computed(() => {
-  const span = session.rangeEndMs - session.rangeStartMs;
-  if (span <= 0) return 0;
-  return Math.min(1, Math.max(0, (session.currentTimeMs - session.rangeStartMs) / span));
+  if (!range.value) return 0;
+  const { startTimeMs, endTimeMs } = range.value;
+  const ratio = (playerState.value.currentTimeMs - startTimeMs) / (endTimeMs - startTimeMs);
+  return Math.min(1, Math.max(0, ratio));
 });
-
-const canvas = ref(null);
-// shallowRef：播放器是类实例，不要做成深层响应式。
-const player = shallowRef(null);
-
-function handlePause() {
-  player.value?.pause();
-}
-
-function handleResume() {
-  player.value?.resume();
-}
-
-function handleStop() {
-  player.value?.stop();
-}
 
 function handleSpeed(event) {
-  const next = player.value?.setSpeed(event.target.value);
-  session.speed = String(next ?? event.target.value);
+  player.setSpeed(Number(event.target.value));
+  // 设置失败时 speed 不变，下拉框要拨回去
+  event.target.value = String(playerState.value.speed);
 }
 
-// 点击位置换成绝对时间。seek 要求 timeMs < end，贴到末尾会被拒绝，所以最多停在结束前 1ms。
+// 点击位置换成绝对时间。seek 要求 timeMs < end，贴到末尾会被拒绝，所以最多停在结束前 1ms
 function handleSeek(event) {
-  if (!seekable.value) return;
-
-  const span = session.rangeEndMs - session.rangeStartMs;
-  if (span <= 0) return;
-
+  if (!range.value) return;
+  const { startTimeMs, endTimeMs } = range.value;
   const rect = event.currentTarget.getBoundingClientRect();
   const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-  const timeMs = Math.min(session.rangeStartMs + ratio * span, session.rangeEndMs - 1);
-  player.value?.seek(timeMs);
+  player.seek(Math.min(startTimeMs + ratio * (endTimeMs - startTimeMs), endTimeMs - 1));
+}
+
+// 查询和切日期都会停掉当前回放。输入不合法时 query 返回 false，播放继续。
+// 播放和导出用的是客户端建好的 storage
+function handleQuery(params) {
+  if (query.query(params)) player.stop();
+}
+
+function handleSelectDate(date) {
+  player.stop();
+  query.selectDate(date);
+}
+
+function handlePlay(recording) {
+  player.play(client.storage, recording);
+}
+
+function handleExport(recording) {
+  exporter.start(client.storage, recording);
 }
 
 onMounted(() => {
-  player.value = new SampleCloudStorage({
-    view: canvas.value,
-    onStatus: (text) => {
-      session.status = text;
-    },
-    onTime: ({ text, currentTimeMs, startTimeMs, endTimeMs }) => {
-      session.currentTime = text;
-      session.currentTimeMs = currentTimeMs;
-      session.rangeStartMs = startTimeMs;
-      session.rangeEndMs = endTimeMs;
-    },
-    onExportStatus: (text) => {
-      session.exportStatus = text;
-    },
-    onExporting: (active) => {
-      session.exporting = active;
-    },
+  client = new CloudClient();
+  query = new Query(client);
+  player = new ReplayPlayer({ view: canvas.value });
+  exporter = new Exporter();
+  query.on('change', (next) => {
+    queryState.value = next;
+  });
+  player.on('change', (next) => {
+    playerState.value = next;
+  });
+  exporter.on('change', (next) => {
+    exportState.value = next;
   });
 });
 
 onUnmounted(() => {
-  player.value?.dispose();
-  player.value = null;
+  exporter?.dispose();
+  player?.dispose();
+  query?.dispose();
+  client?.dispose();
+  exporter = null;
+  player = null;
+  query = null;
+  client = null;
 });
 </script>
 
@@ -101,13 +111,13 @@ onUnmounted(() => {
 
       <div
         class="absolute inset-x-1.5 bottom-0 pt-2"
-        :class="seekable ? 'cursor-pointer' : ''"
+        :class="range ? 'cursor-pointer' : ''"
         role="slider"
         aria-label="播放进度"
-        :aria-valuemin="session.rangeStartMs"
-        :aria-valuemax="session.rangeEndMs"
-        :aria-valuenow="seekable ? session.currentTimeMs : 0"
-        :aria-disabled="!seekable"
+        :aria-valuemin="range?.startTimeMs ?? 0"
+        :aria-valuemax="range?.endTimeMs ?? 0"
+        :aria-valuenow="range ? playerState.currentTimeMs : 0"
+        :aria-disabled="!range"
         @click="handleSeek"
       >
         <div class="h-1 overflow-hidden rounded-full bg-white/40">
@@ -119,26 +129,36 @@ onUnmounted(() => {
     <div class="card card-sm bg-base-100 shadow-sm">
       <div class="card-body">
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" class="btn btn-sm" @click="handlePause">暂停</button>
-          <button type="button" class="btn btn-sm" @click="handleResume">继续</button>
-          <button type="button" class="btn btn-sm" @click="handleStop">停止</button>
+          <button type="button" class="btn btn-sm" :disabled="!range" @click="player.pause()">暂停</button>
+          <button type="button" class="btn btn-sm" :disabled="!range" @click="player.resume()">继续</button>
+          <button type="button" class="btn btn-sm" :disabled="!range" @click="player.stop()">停止</button>
 
           <!-- 倍速 -->
-          <select class="select select-sm w-auto" :value="session.speed" @change="handleSpeed">
+          <select class="select select-sm w-auto" :value="String(playerState.speed)" @change="handleSpeed">
             <option v-for="item in SPEEDS" :key="item" :value="String(item)">{{ item }}×</option>
           </select>
           <span
-            v-if="session.speed !== '1'"
+            v-if="playerState.speed !== 1"
             class="tooltip tooltip-top text-xs text-base-content/50"
             data-tip="非 1 倍速时静音"
             >静音</span
           >
 
-          <span class="ms-auto text-sm text-base-content/70">{{ session.currentTime }}</span>
+          <span class="ms-auto text-sm text-base-content/70">{{ currentTimeText }}</span>
         </div>
+
+        <p v-if="playerState.status" class="text-xs text-base-content/60" role="status">{{ playerState.status }}</p>
       </div>
     </div>
 
-    <QueryCard :player="player" :session="session" />
+    <QueryCard
+      :query="queryState"
+      :export-state="exportState"
+      @query="handleQuery"
+      @select-date="handleSelectDate"
+      @play="handlePlay"
+      @export="handleExport"
+      @cancel-export="() => exporter.cancel()"
+    />
   </AppContainer>
 </template>

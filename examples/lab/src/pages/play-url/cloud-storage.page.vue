@@ -1,5 +1,6 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import AppContainer from '../../components/AppContainer.vue';
 import AppHeader from '../../components/AppHeader.vue';
 import { getDefaultFormValues, saveForm, createToken, buildPlayerUrl } from './cloud-storage.module.js';
@@ -13,6 +14,7 @@ const form = reactive({
   durationSeconds: '3600',
 });
 
+const router = useRouter();
 const playerUrl = ref('');
 const errorMessage = ref('');
 const copyHint = ref(false);
@@ -69,7 +71,12 @@ function handleSubmit() {
 
 function openPlayerPage() {
   if (!playerUrl.value) return;
-  window.location.assign(playerUrl.value);
+
+  // window.location.assign(playerUrl.value);
+  router.push({
+    path: '/cloud-storage',
+    query: Object.fromEntries(new URL(playerUrl.value).searchParams),
+  });
 }
 
 async function copyPlayerUrl() {
