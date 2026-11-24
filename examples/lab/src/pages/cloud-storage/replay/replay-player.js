@@ -5,7 +5,6 @@ import {
 } from '@/libs/tirtc';
 import Emitter from '@/utils/emitter.js';
 import { formatTime } from './date-utils.js';
-import { AUDIO_CHANNEL_ID, VIDEO_CHANNEL_ID } from './cloud-client.js';
 
 // 一次云存回放：播放、跳转、暂停、倍速。
 // 不建连，也不查列表。页面把客户端的 storage 和时间范围传进来。
@@ -13,7 +12,8 @@ import { AUDIO_CHANNEL_ID, VIDEO_CHANNEL_ID } from './cloud-client.js';
 // 用法：
 //   const player = new ReplayPlayer({ view: canvas });
 //   player.on('change', (state) => ...);
-//   player.play(client.storage, { startTimeMs, endTimeMs });
+//   player.play(client.storage, { startTimeMs, endTimeMs, videoChannelId, audioChannelId });
+//   audioChannelId 为 null 时不播放声音。
 //
 // SDK 的云存接口不抛异常，失败时返回非 0 错误码，这里统一转成 state.status 的一行文字。
 
@@ -32,7 +32,9 @@ export class ReplayPlayer extends Emitter {
 
   #storage = null;
   #replay = null;
-  // 视频和音频输出整个播放器只建一次。storage 变了就换一个 replay，再重新 attach
+  // 上次挂上的通道。storage 或通道变了就换一个 replay，再重新 attach
+  #channels = null;
+  // 视频和音频输出整个播放器只建一次
   #videoOutput;
   #audioOutput;
 
@@ -43,10 +45,12 @@ export class ReplayPlayer extends Emitter {
     this.#audioOutput = new TiCloudStorageAudioOutput();
   }
 
-  // storage 和上次不同，或还没有 replay 时，先 #mount。空的 storage 表示还没查询
-  play(storage, { startTimeMs, endTimeMs }) {
-    if (this.#storage !== storage || !this.#replay) {
-      if (!this.#mount(storage)) return this.#setState({ status: '请先查询' });
+  // storage 或通道和上次不同，或还没有 replay 时，先 #mount。空的 storage 表示还没查询。
+  // audioChannelId 为 null 时只出画面。
+  play(storage, { startTimeMs, endTimeMs, videoChannelId, audioChannelId = null }) {
+    const channelsChanged = !this.#sameChannels(videoChannelId, audioChannelId);
+    if (this.#storage !== storage || !this.#replay || channelsChanged) {
+      if (!this.#mount(storage, videoChannelId, audioChannelId)) return this.#setState({ status: '请先查询' });
     }
 
     const code = this.#replay.play(startTimeMs, endTimeMs);
@@ -99,16 +103,18 @@ export class ReplayPlayer extends Emitter {
     this.#replay?.dispose();
     this.#replay = null;
     this.#storage = null;
+    this.#channels = null;
     this.removeAllListeners();
     this.#videoOutput.dispose();
     this.#audioOutput.dispose();
   }
 
-  // 拆掉旧 replay，用这个 storage 建一个并挂上视频和音频输出。storage 为空或创建失败时返回 false
-  #mount(storage) {
+  // 拆掉旧 replay，用这个 storage 和通道重新挂上输出。storage 为空或创建失败时返回 false
+  #mount(storage, videoChannelId, audioChannelId) {
     this.#replay?.dispose();
     this.#replay = null;
     this.#storage = null;
+    this.#channels = null;
     if (!storage) return false;
 
     const replay = storage.createReplay();
@@ -120,11 +126,19 @@ export class ReplayPlayer extends Emitter {
     replay.onCompleted = () => this.#setState({ status: '播放完成', currentTimeMs: this.state.range?.endTimeMs ?? 0 });
     replay.onError = (code) => this.#setState({ status: `播放失败：${code}`, range: null, currentTimeMs: 0 });
 
-    this.#videoOutput.attach(replay, VIDEO_CHANNEL_ID);
-    this.#audioOutput.attach(replay, AUDIO_CHANNEL_ID);
+    this.#videoOutput.attach(replay, videoChannelId);
+    // 换通道要拆掉上一路。音频留空就只出画面，不能把 null 传给 attach，否则会当成通道 0。
+    if (audioChannelId == null) this.#audioOutput.detach();
+    else this.#audioOutput.attach(replay, audioChannelId);
     this.#storage = storage;
+    this.#channels = { videoChannelId, audioChannelId };
     this.#replay = replay;
     return true;
+  }
+
+  #sameChannels(videoChannelId, audioChannelId) {
+    const prev = this.#channels;
+    return prev?.videoChannelId === videoChannelId && prev?.audioChannelId === audioChannelId;
   }
 
   #setState(patch) {

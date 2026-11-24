@@ -9,10 +9,6 @@ import { TiCloudStorage, TiCloudStorageErrorCode as ErrorCode } from '@/libs/tir
 //   client.storage;  // 建连成功后的 TiCloudStorage，还没连上时为 null
 //   client.dispose();
 
-// 设备只有一路画面和一路声音时，通道号都是 0
-export const VIDEO_CHANNEL_ID = 0;
-export const AUDIO_CHANNEL_ID = 0;
-
 export class CloudClient {
   storage = null;
 

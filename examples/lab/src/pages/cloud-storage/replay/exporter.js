@@ -1,6 +1,5 @@
 import { TiCloudStorageErrorCode as ErrorCode } from '@/libs/tirtc';
 import Emitter from '@/utils/emitter.js';
-import { AUDIO_CHANNEL_ID, VIDEO_CHANNEL_ID } from './cloud-client.js';
 
 // 把一段时间的录像导出成 MP4 并下载。与回放互不影响，同一时间只能有一个任务。
 // 不建连。页面把客户端的 storage 和时间范围传进来。
@@ -8,7 +7,8 @@ import { AUDIO_CHANNEL_ID, VIDEO_CHANNEL_ID } from './cloud-client.js';
 // 用法：
 //   const exporter = new Exporter();
 //   exporter.on('change', (state) => ...);
-//   await exporter.start(client.storage, { startTimeMs, endTimeMs });
+//   await exporter.start(client.storage, { startTimeMs, endTimeMs, videoChannelId, audioChannelId });
+//   audioChannelId 为 null 时只导出画面。
 //
 // SDK 的云存接口不抛异常，失败时返回非 0 错误码，这里统一转成 state.status 的一行文字。
 
@@ -25,15 +25,18 @@ export class Exporter extends Emitter {
 
   #task = null;
 
-  // 导出 range 的前 60 秒并下载。storage 为空表示还没查询
-  async start(storage, { startTimeMs, endTimeMs }) {
+  // 导出 range 的前 60 秒并下载。storage 为空表示还没查询。
+  // audioChannelId 为 null 时只导出画面。
+  async start(storage, { startTimeMs, endTimeMs, videoChannelId, audioChannelId = null }) {
     if (!storage) return this.#setState({ status: '请先查询' });
     if (this.#task) return;
 
     const end = Math.min(endTimeMs, startTimeMs + EXPORT_MAX_MS);
-    const { code, task } = storage.exportRecording(
-      { startTimeMs, endTimeMs: end, videoChannelId: VIDEO_CHANNEL_ID, audioChannelId: AUDIO_CHANNEL_ID },
-      (progress) => this.#setState({ status: `导出中 ${Math.round(progress * 100)}%` }),
+    const options = { startTimeMs, endTimeMs: end, videoChannelId };
+    // SDK 把 null 当成非法通道。不传 audioChannelId 才是只导出画面。
+    if (audioChannelId != null) options.audioChannelId = audioChannelId;
+    const { code, task } = storage.exportRecording(options, (progress) =>
+      this.#setState({ status: `导出中 ${Math.round(progress * 100)}%` }),
     );
     if (code !== ErrorCode.OK) return this.#setState({ status: `导出失败：${code}` });
 
