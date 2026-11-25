@@ -57,7 +57,8 @@ export class ReplayPlayer extends Emitter {
     if (code !== ErrorCode.OK) return this.#setState({ status: `播放失败：${code}` });
 
     this.#setState({
-      status: `播放 ${formatTime(startTimeMs)} - ${formatTime(endTimeMs)}`,
+      // status: `播放 ${formatTime(startTimeMs)} - ${formatTime(endTimeMs)}`,
+      status: '',
       range: { startTimeMs, endTimeMs },
       currentTimeMs: startTimeMs,
     });

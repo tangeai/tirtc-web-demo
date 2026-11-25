@@ -30,7 +30,6 @@ const playerState = shallowRef(initialPlayerState);
 const exportState = shallowRef(initialExportState);
 
 const range = computed(() => playerState.value.range);
-const currentTimeText = computed(() => (range.value ? formatTime(playerState.value.currentTimeMs) : '--:--:--'));
 
 // 当前时间在本次播放区间里的位置，0 ~ 1。没在播时为 0
 const progress = computed(() => {
@@ -144,7 +143,10 @@ onUnmounted(() => {
             >静音</span
           >
 
-          <span class="ms-auto text-sm text-base-content/70">{{ currentTimeText }}</span>
+          <div class="ms-auto text-right text-[11px] tabular-nums leading-tight sm:text-xs">
+            <div class="text-base-content/70">{{ range ? formatTime(playerState.currentTimeMs) : '--:--:--' }}</div>
+            <div v-if="range" class="text-base-content/40">{{ formatTime(range.endTimeMs) }}</div>
+          </div>
         </div>
 
         <p v-if="playerState.status" class="text-xs text-base-content/60" role="status">{{ playerState.status }}</p>
